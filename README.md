@@ -321,4 +321,3 @@ streamlit run main.py
 
 Built with ❤️ by [Jayanth ](mailto:chjayanth119@gmail.com)
 GitHub: [github.com/jayanth119](https://github.com/jayanth119)
-```
