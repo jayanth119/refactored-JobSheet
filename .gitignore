@@ -1,0 +1,8 @@
+env
+.env
+__init__.py
+README.md
+main.py
+components
+requirements.txt
+README.md
