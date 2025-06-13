@@ -1,5 +1,16 @@
 import sqlite3
-import os 
+import os
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import hashlib
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+import io
+import time
+import sys
+import os  
 class DatabaseManager:
     def __init__(self, db_path="repairpro.db"):
         
