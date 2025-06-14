@@ -100,6 +100,7 @@ def sidebar_navigation():
     
     if st.sidebar.button("🚪 Sign Out", use_container_width=True):
         st.session_state.clear()
+        st.query_params.clear()
         st.rerun()
     
     return menu_items[selected]

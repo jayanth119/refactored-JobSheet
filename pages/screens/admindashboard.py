@@ -116,7 +116,7 @@ def admin_dashboard(st):
         FROM jobs j
         LEFT JOIN stores s ON j.store_id = s.id
         ORDER BY j.created_at DESC 
-        LIMIT 10
+        LIMIT 5
     """, conn)
     
     if not recent_jobs.empty:

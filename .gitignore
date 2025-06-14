@@ -3,5 +3,4 @@ env
 __init__.py
 __pycache__
 .DS_Store
-repairpro.db
 .DS_Store

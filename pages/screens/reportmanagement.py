@@ -86,9 +86,14 @@ def reports_management():
         with col2:
             st.metric("Completed Jobs", metrics['completed_jobs'])
         with col3:
-            st.metric("Revenue", f"${metrics['total_revenue']:,.2f}")
+            revenue = metrics['total_revenue'] if metrics['total_revenue'] is not None else 0
+            
+            st.metric("Revenue", f"${revenue:,.2f}")
+            # st.metric("Revenue", f"${metrics['total_revenue']:,.2f}")
         with col4:
-            st.metric("Avg. Job Value", f"${metrics['avg_job_value']:,.2f}" if metrics['avg_job_value'] else "$0.00")
+            avg_job_value = metrics['avg_job_value'] if metrics['avg_job_value'] is not None else 0
+            st.metric("Avg. Job Value", f"${avg_job_value:,.2f}")
+            # st.metric("Avg. Job Value", f"${metrics['avg_job_value']:,.2f}" if metrics['avg_job_value'] else "$0.00")
         
         st.markdown("---")
         

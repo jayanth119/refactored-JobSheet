@@ -1,5 +1,6 @@
 import sys
 import os 
+import json 
 import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.css.css import Style
@@ -49,14 +50,28 @@ def login_signup_page():
                         st.session_state.user = user
                         st.session_state.authenticated = True
                         st.session_state.login_time = time.time()
+
+                        # Generate and store token
+                        token = hashlib.sha256(f"{username}-{time.time()}".encode()).hexdigest()
+                        st.query_params.update({"token": token})
+
+                        # Save to file
+                        if os.path.exists("tokens.json"):
+                            with open("tokens.json", "r") as f:
+                                token_map = json.load(f)
+                        else:
+                            token_map = {}
+
+                        token_map[token] = user
+                        with open("tokens.json", "w") as f:
+                            json.dump(token_map, f)
+
                         st.success(f"Welcome back, {user['full_name']}!")
                         time.sleep(1)
                         st.rerun()
                     else:
                         st.error("❌ Invalid username or password")
-                else:
-                    st.error("⚠️ Please enter both username and password")
-        
+       
         # Demo credentials
         st.markdown("---")
         st.info("""
