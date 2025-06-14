@@ -1,4 +1,4 @@
-# 📋 refactored-JobSheet
+# 📋 refactored-JobSheet ( Gen Ai application)
 
 A **Streamlit-based Job Sheet Management System** designed for mobile/computer repair shops. The system streamlines job tracking, customer and product management, PDF generation, and automated communication via email and WhatsApp.
 
