@@ -14,8 +14,9 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.css.css import Style
 from components.datamanager.databasemanger import DatabaseManager
-from components.utils.auth import hash_password , verify_password,authenticate_user , create_user
+from components.utils.auth import hash_password, verify_password, authenticate_user, create_user
 from pages.screens.loginpage import login_signup_page
+
 def admin_dashboard(st):
     user = st.session_state.user
     
@@ -72,9 +73,45 @@ def admin_dashboard(st):
         ''', unsafe_allow_html=True)
     
     st.markdown("---")
-    
+    # Search functionality
+    st.markdown("### Search Jobs")
+    search_term = st.text_input("🔍 Search by customer name, device, or problem description", label_visibility="visible")
+
+    if search_term:
+        search_query = """
+            SELECT j.id, j.customer_name, j.device_type, j.device_model,
+                   j.problem_description, j.status, j.technician, 
+                   j.created_at, s.name as store_name
+            FROM jobs j
+            LEFT JOIN stores s ON j.store_id = s.id
+            WHERE (j.customer_name LIKE ? OR j.device_type LIKE ? OR 
+                   j.device_model LIKE ? OR j.problem_description LIKE ?)
+        """
+        params = [f"%{search_term}%"] * 4
+
+        if user['role'] == 'staff':
+            search_query += " AND j.store_id = ?"
+            params.append(user['store_id'])
+
+        search_query += " ORDER BY j.created_at DESC LIMIT 20"
+        search_results = pd.read_sql(search_query, conn, params=params)
+
+        if not search_results.empty:
+            st.write(f"Found {len(search_results)} results:")
+            for _, job in search_results.iterrows():
+                st.markdown(f'''
+                    <div class="job-card">
+                        <div class="job-title">#{job['id']} - {job['customer_name']}{f" | 🏪 {job['store_name']}" if user['role'] == 'admin' else ""}</div>
+                        <div class="job-details">{job['device_type']} - {job['device_model']}</div>
+                        <div class="job-details">{job['problem_description']}</div>
+                        <div class="job-details">👨‍🔧 {job['technician'] or 'Unassigned'} | 🗓️ {job['created_at'][:10]}</div>
+                        <span class="status-{job['status'].lower().replace(' ', '-')}">{job['status']}</span>
+                    </div>
+                ''', unsafe_allow_html=True)
+        else:
+            st.info("No jobs found matching your search term")
     # Store Performance Overview
-    col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([6, 1])
     
     with col1:
         st.markdown("### 🏪 Store Performance Overview")
@@ -95,42 +132,30 @@ def admin_dashboard(st):
         else:
             st.info("No store performance data available")
     
-    with col2:
-        st.markdown("### 📊 Revenue by Store")
-        
-        if not store_performance.empty and store_performance['revenue'].sum() > 0:
-            fig = px.pie(store_performance, values='revenue', names='name', 
-                        title="Revenue Distribution",
-                        color_discrete_sequence=['#667eea', '#764ba2', '#f093fb', '#f5576c'])
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("No revenue data to display")
-    
     # Recent Jobs Across All Stores
-    st.markdown("### 📋 Recent Jobs (All Stores)")
+    # st.markdown("### 📋 Recent Jobs (All Stores)")
     
-    recent_jobs = pd.read_sql("""
-        SELECT j.id, j.customer_name, j.device_type, j.device_model, 
-               j.problem_description, j.status, j.created_at, s.name as store_name
-        FROM jobs j
-        LEFT JOIN stores s ON j.store_id = s.id
-        ORDER BY j.created_at DESC 
-        LIMIT 5
-    """, conn)
+    # recent_jobs = pd.read_sql("""
+    #     SELECT j.id, j.customer_name, j.device_type, j.device_model, 
+    #            j.problem_description, j.status, j.created_at, s.name as store_name
+    #     FROM jobs j
+    #     LEFT JOIN stores s ON j.store_id = s.id
+    #     ORDER BY j.created_at DESC 
+    #     LIMIT 5
+    # """, conn)
     
-    if not recent_jobs.empty:
-        for _, job in recent_jobs.iterrows():
-            status_class = f"status-{job['status'].lower().replace(' ', '-').replace('_', '-')}"
-            st.markdown(f'''
-                <div class="job-card">
-                    <div class="job-title">#{job['id']} - {job['customer_name']} | {job['store_name'] or 'Unknown Store'}</div>
-                    <div class="job-details">{job['device_type']} - {job['device_model']}</div>
-                    <div class="job-details">{job['problem_description']}</div>
-                    <span class="{status_class}">{job['status']}</span>
-                </div>
-            ''', unsafe_allow_html=True)
-    else:
-        st.info("No recent jobs found")
+    # if not recent_jobs.empty:
+    #     for _, job in recent_jobs.iterrows():
+    #         status_class = f"status-{job['status'].lower().replace(' ', '-').replace('_', '-')}"
+    #         st.markdown(f'''
+    #             <div class="job-card">
+    #                 <div class="job-title">#{job['id']} - {job['customer_name']} | {job['store_name'] or 'Unknown Store'}</div>
+    #                 <div class="job-details">{job['device_type']} - {job['device_model']}</div>
+    #                 <div class="job-details">{job['problem_description']}</div>
+    #                 <span class="{status_class}">{job['status']}</span>
+    #             </div>
+    #         ''', unsafe_allow_html=True)
+    # else:
+    #     st.info("No recent jobs found")
     
     conn.close()

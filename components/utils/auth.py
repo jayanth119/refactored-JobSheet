@@ -25,7 +25,8 @@ def authenticate_user(username, password):
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT u.id, u.username, u.role, u.store_id, u.full_name, u.email, s.name as store_name
+        SELECT u.id, u.username, u.role, u.store_id, u.full_name, u.email, 
+               COALESCE(s.name, 'All Stores') as store_name
         FROM users u
         LEFT JOIN stores s ON u.store_id = s.id
         WHERE u.username = ? AND u.password = ?
@@ -45,7 +46,7 @@ def authenticate_user(username, password):
             "store_id": user[3],
             "full_name": user[4],
             "email": user[5],
-            "store_name": user[6] if user[6] else "All Stores"
+            "store_name": user[6]
         }
         conn.close()
         return user_data
