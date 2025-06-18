@@ -2,6 +2,34 @@ import streamlit as st
 import pandas as pd 
 import io 
 from PIL import Image
+
+def visualize_pattern(pattern_str):
+    grid = [["①", "②", "③"],
+            ["④", "⑤", "⑥"],
+            ["⑦", "⑧", "⑨"]]
+    
+    # Convert string like "2 → 5 → 8 → 7 → 4 → 1" to a list of ints
+    try:
+        points = [int(p.strip()) for p in pattern_str.split("→")]
+    except Exception:
+        return "Invalid pattern format"
+
+    # Create a grid of status
+    status_grid = [["" for _ in range(3)] for _ in range(3)]
+    num_to_coords = {
+        1: (0, 0), 2: (0, 1), 3: (0, 2),
+        4: (1, 0), 5: (1, 1), 6: (1, 2),
+        7: (2, 0), 8: (2, 1), 9: (2, 2),
+    }
+
+    for i, num in enumerate(points):
+        r, c = num_to_coords.get(num, (-1, -1))
+        if r == -1: continue
+        grid[r][c] = f"🔵{num}"  # Highlight selected point
+
+    rows = [" ".join(row) for row in grid]
+    return "\n".join(rows)
+
 def show_job_details_modal(conn, job_id):
     """Show complete job details in a centered modal dialog with photos"""
     cursor = conn.cursor()
@@ -37,10 +65,10 @@ def show_job_details_modal(conn, job_id):
         @st.dialog(f"📋 Job Details - #{job_id}")
         def job_details_dialog():
             col1, col2 = st.columns([6, 1])
-            with col2:
-                if st.button("❌", key=f"close_{job_id}", help="Close"):
-                    st.session_state[f"show_details_{job_id}"] = False
-                    st.rerun()
+            # with col2:
+                # if st.button("❌", key=f"close_{job_id}", help="Close"):
+                #     st.session_state[f"show_details_{job_id}"] = False
+                #     st.rerun()
             
             # Customer Info
             st.markdown("### 👤 Customer Information")
@@ -71,11 +99,17 @@ def show_job_details_modal(conn, job_id):
                 """)
             with col2:
                 st.markdown(f"""
-                **Password:** {'*' * len(job_details[7]) if job_details[7] else 'Not provided'}  
+                **Password:** {job_details[7] or 'Not provided'}  
                 **Notifications:** {job_details[8] or 'Not specified'}  
                 **Technician:** {job_details[20] or 'Unassigned'}
                 """)
             
+            pattern_text = job_details[7] or 'Not provided'
+            if job_details[6] == "Pattern":
+                pattern_display = visualize_pattern(pattern_text)
+                st.markdown(f"**Pattern:**\n```\n{pattern_display}\n```")
+            else:
+                st.markdown(f"**Password:** {pattern_text}")
             st.divider()
 
             # Problem Description

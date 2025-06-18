@@ -6,6 +6,7 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.utils.createjob import create_job_in_database
+from components.notifications.email_utils import send_job_status_email
 
 def create_job_tab(conn, user, db):
     st.markdown("### Create New Repair Job")
@@ -78,7 +79,7 @@ def create_job_tab(conn, user, db):
         technician_assignment = render_technician_assignment(conn, user)
 
         st.markdown("#### 📢 Notification Preferences")
-        notification_methods = st.multiselect("How should we notify the customer?", ["SMS", "Email", "Phone Call", "WhatsApp"], default=["SMS"])
+        notification_methods = st.multiselect("How should we notify the customer?", ["SMS", "Email", "Phone Call", "WhatsApp"], default=["Email"])
 
         st.markdown("#### 📸 Device Photos")
         st.info("💡 Photos will be uploaded and securely stored")
@@ -130,7 +131,8 @@ def create_job_tab(conn, user, db):
                         },
                         uploaded_photos
                     )
-                if success:
+                if success:      
+                    send_job_status_email(conn, job_id)
                     st.session_state.job_created_successfully = True
                     st.session_state.last_created_job_id = job_id
                     if device_password:
@@ -174,7 +176,6 @@ def render_password_section():
                 **Example formats:**
                 - Simple: `1 → 5 → 9`
                 - Complex: `2 → 5 → 8 → 7 → 4 → 1`
-                - With description: `L-shape starting top-left`
                 """)
     return {'type': password_type, 'value': password_value.strip() if password_value else ""}
 

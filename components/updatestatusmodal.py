@@ -3,6 +3,7 @@ import os
 import sys 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.datamanager.databasemanger import DatabaseManager
+from components.notifications.email_utils import send_job_status_email
 def show_update_status_modal(conn, job_id, new_status):
     """Modal for updating job status with cost adjustment - centered UI"""
     
@@ -121,6 +122,7 @@ def show_update_status_modal(conn, job_id, new_status):
                     type="primary", 
                     use_container_width=True
                 )
+                
             
             # Handle form submissions
             if cancel_clicked:
@@ -181,6 +183,7 @@ def show_update_status_modal(conn, job_id, new_status):
                     
                     new_conn.commit()
                     st.success(success_msg)
+                    send_job_status_email(new_conn , job_id)
                     
                     # Clear the modal and close connection
                     st.session_state[f"show_update_{job_id}"] = False
