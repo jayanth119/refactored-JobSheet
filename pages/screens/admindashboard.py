@@ -14,8 +14,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.css.css import Style
 from components.datamanager.databasemanger import DatabaseManager
-from components.utils.auth import hash_password, verify_password, authenticate_user, create_user
-from pages.screens.loginpage import login_signup_page
+from pages.screens.createjob import create_job_tab 
 
 def admin_dashboard(st):
     user = st.session_state.user
@@ -79,13 +78,28 @@ def admin_dashboard(st):
 
     if search_term:
         search_query = """
-            SELECT j.id, j.customer_name, j.device_type, j.device_model,
-                   j.problem_description, j.status, j.technician, 
-                   j.created_at, s.name as store_name
+            SELECT 
+                j.id, 
+                c.name AS customer_name, 
+                j.device_type, 
+                j.device_model,
+                j.problem_description, 
+                j.status, 
+                u.full_name AS technician, 
+                j.created_at, 
+                s.name AS store_name
             FROM jobs j
+            LEFT JOIN customers c ON j.customer_id = c.id
             LEFT JOIN stores s ON j.store_id = s.id
-            WHERE (j.customer_name LIKE ? OR j.device_type LIKE ? OR 
-                   j.device_model LIKE ? OR j.problem_description LIKE ?)
+            LEFT JOIN assignment_jobs aj ON j.id = aj.job_id
+            LEFT JOIN technician_assignments ta ON aj.assignment_id = ta.id
+            LEFT JOIN users u ON ta.technician_id = u.id
+            WHERE (
+                c.name LIKE ? OR 
+                j.device_type LIKE ? OR 
+                j.device_model LIKE ? OR 
+                j.problem_description LIKE ?
+            )
         """
         params = [f"%{search_term}%"] * 4
 
@@ -109,11 +123,14 @@ def admin_dashboard(st):
                     </div>
                 ''', unsafe_allow_html=True)
         else:
-            st.info("No jobs found matching your search term")
+            st.info("No jobs found matching your search term.")
     # Store Performance Overview
     col1, col2 = st.columns([6, 1])
     
+    
     with col1:
+        create_job_tab(conn, user, db)
+
         st.markdown("### 🏪 Store Performance Overview")
         
         store_performance = pd.read_sql("""

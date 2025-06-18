@@ -27,46 +27,46 @@ def customers_management():
         </div>
     ''', unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["➕ Add Customer", "👥 View Customers", "🔍 Search Customers"])
+    tab2, tab3 = st.tabs([ "👥 View Customers", "🔍 Search Customers"])
     
     db = DatabaseManager()
     conn = db.get_connection()
     
-    with tab1:
-        st.markdown("### Add New Customer")
-        with st.form("new_customer_form"):
-            col1, col2 = st.columns(2)
+    # with tab1:
+    #     st.markdown("### Add New Customer")
+    #     with st.form("new_customer_form"):
+    #         col1, col2 = st.columns(2)
             
-            with col1:
-                name = st.text_input("Customer Name*", placeholder="Enter full name")
-                phone = st.text_input("Phone Number*", placeholder="Enter phone number")
+    #         with col1:
+    #             name = st.text_input("Customer Name*", placeholder="Enter full name")
+    #             phone = st.text_input("Phone Number*", placeholder="Enter phone number")
             
-            with col2:
-                email = st.text_input("Email", placeholder="Enter email address")
-                address = st.text_area("Address", placeholder="Enter customer address", height=100)
+    #         with col2:
+    #             email = st.text_input("Email", placeholder="Enter email address")
+    #             address = st.text_area("Address", placeholder="Enter customer address", height=100)
             
-            submit_customer = st.form_submit_button("👤 Add Customer", use_container_width=True)
+    #         submit_customer = st.form_submit_button("👤 Add Customer", use_container_width=True)
             
-            if submit_customer:
-                if name and phone:
-                    try:
-                        store_id = user['store_id'] if user['role'] == 'staff' else 1
+    #         if submit_customer:
+    #             if name and phone:
+    #                 try:
+    #                     store_id = user['store_id'] if user['role'] == 'staff' else 1
                         
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO customers (name, phone, email, address, store_id)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (name, phone, email, address, store_id))
+    #                     cursor = conn.cursor()
+    #                     cursor.execute("""
+    #                         INSERT INTO customers (name, phone, email, address, store_id)
+    #                         VALUES (?, ?, ?, ?, ?)
+    #                     """, (name, phone, email, address, store_id))
                         
-                        customer_id = cursor.lastrowid
-                        conn.commit()
+    #                     customer_id = cursor.lastrowid
+    #                     conn.commit()
                         
-                        st.success(f"✅ Customer '{name}' added successfully! (ID: {customer_id})")
+    #                     st.success(f"✅ Customer '{name}' added successfully! (ID: {customer_id})")
                         
-                    except Exception as e:
-                        st.error(f"❌ Error adding customer: {str(e)}")
-                else:
-                    st.error("⚠️ Please fill in required fields (Name and Phone)")
+    #                 except Exception as e:
+    #                     st.error(f"❌ Error adding customer: {str(e)}")
+    #             else:
+    #                 st.error("⚠️ Please fill in required fields (Name and Phone)")
     
     with tab2:
         st.markdown("### Customer Directory")
@@ -130,7 +130,7 @@ def customers_management():
                         for _, job in job_history.iterrows():
                             status_class = f"status-{job['status'].lower().replace(' ', '-')}"
                             st.markdown(f'''
-                                <div style="background: #f8f9fa; padding: 0.5rem; border-radius: 5px; margin: 0.2rem 0;">
+                                <div style="background: black; padding: 0.5rem; border-radius: 5px; margin: 0.2rem 0;">
                                     <small>#{job['id']} - {job['device_type']} {job['device_model']} | {job['created_at'][:10]} | 
                                     <span class="{status_class}">{job['status']}</span></small>
                                 </div>
