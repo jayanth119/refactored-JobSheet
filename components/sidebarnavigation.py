@@ -56,7 +56,7 @@ def sidebar_navigation():
             "👤 User Management": "users",
             "⚙️ Settings": "settings"
         }
-    if user['role'] =="manager":
+    elif  user['role'] =="manager":
         menu_items = {
             "🏠 Dashboard": "dashboard",
             "📋 Jobs": "jobs",
@@ -68,7 +68,6 @@ def sidebar_navigation():
         menu_items = {
             "🏠 Dashboard": "dashboard",
             "📋 Jobs": "jobs",
-            "👥 Customers": "customers",
             "📊 Reports": "reports",
             "⚙️ Settings": "settings"
         }

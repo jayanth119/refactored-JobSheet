@@ -11,9 +11,8 @@ db = DatabaseManager()
 conn = db.get_connection()
 
 def view_jobs_tab(conn, user):
-    """Enhanced Jobs Management with Status-based Tabs"""
+    """Enhanced Jobs Management with Status-based Tabs and Role-based Access"""
 
-    
     # Search functionality at the top
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -24,9 +23,9 @@ def view_jobs_tab(conn, user):
     # Create tabs for different status types
     tab1, tab2, tab3 = st.tabs(["🆕 New Jobs", "⚙️ In Progress", "✅ Completed"])
     
-    # Helper function to get jobs by status
+    # Helper function to get jobs by status with role-based filtering
     def get_jobs_by_status(status):
-        query = '''
+        base_query = '''
         SELECT 
             j.id,
             j.created_at,
@@ -52,25 +51,34 @@ def view_jobs_tab(conn, user):
         
         params = [status]
         
-        # Add store filter if user has store_id
-        if user.get('store_id'):
-            query += " AND j.store_id = ?"
-            params.append(user['store_id'])
+        # Role-based filtering
+        if user['role'] == 'admin':
+            # Admins can see all jobs
+            pass
+        elif user['role'] in ['manager', 'staff']:
+            # Managers and staff can only see jobs from their store(s)
+            if user.get('store_id'):
+                base_query += " AND j.store_id = ?"
+                params.append(user['store_id'])
+        elif user['role'] == 'technician':
+            # Technicians can only see jobs assigned to them
+            base_query += " AND ta.technician_id = ?"
+            params.append(user['id'])
         
         # Add search filter
         if search_term:
-            query += " AND (c.name LIKE ? OR j.device_type LIKE ? OR j.problem_description LIKE ?)"
+            base_query += " AND (c.name LIKE ? OR j.device_type LIKE ? OR j.problem_description LIKE ?)"
             search_pattern = f"%{search_term}%"
             params.extend([search_pattern, search_pattern, search_pattern])
         
         # Add device filter
         if device_filter != "All":
-            query += " AND j.device_type = ?"
+            base_query += " AND j.device_type = ?"
             params.append(device_filter)
         
-        query += " ORDER BY j.created_at DESC"
+        base_query += " ORDER BY j.created_at DESC"
         
-        return pd.read_sql(query, conn, params=params)
+        return pd.read_sql(base_query, conn, params=params)
     
     # Helper function to display job card with action buttons
     def display_job_card(jobs_df, tab_status):
@@ -109,16 +117,17 @@ def view_jobs_tab(conn, user):
                         if st.button(f"👁️ View", key=f"view_{job['id']}"):
                             st.session_state[f"show_details_{job['id']}"] = True
                         
-                        # Status change buttons based on current status
-                        if tab_status == "New":
-                            if st.button(f"▶️ Start", key=f"start_{job['id']}", type="primary"):
-                                st.session_state[f"show_update_{job['id']}"] = "In Progress"
-                                st.rerun()
-                        
-                        elif tab_status == "In Progress":
-                            if st.button(f"✅ Complete", key=f"complete_{job['id']}", type="primary"):
-                                st.session_state[f"show_update_{job['id']}"] = "Completed"
-                                st.rerun()
+                        # Status change buttons based on current status and user role
+                        if user['role'] in ['admin', 'manager', 'technician']:
+                            if tab_status == "New":
+                                if st.button(f"▶️ Start", key=f"start_{job['id']}", type="primary"):
+                                    st.session_state[f"show_update_{job['id']}"] = "In Progress"
+                                    st.rerun()
+                            
+                            elif tab_status == "In Progress":
+                                if st.button(f"✅ Complete", key=f"complete_{job['id']}", type="primary"):
+                                    st.session_state[f"show_update_{job['id']}"] = "Completed"
+                                    st.rerun()
         else:
             st.info(f"No {tab_status.lower()} jobs found.")
     
@@ -131,7 +140,7 @@ def view_jobs_tab(conn, user):
         # Check for modals in New Jobs tab
         for idx, job in new_jobs.iterrows():
             if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'])
+                show_job_details_modal(conn, job['id'], editable=(user['role'] in ['admin', 'manager']))
             if st.session_state.get(f"show_update_{job['id']}", False):
                 show_update_status_modal(conn, job['id'], st.session_state[f"show_update_{job['id']}"])
     
@@ -144,7 +153,7 @@ def view_jobs_tab(conn, user):
         # Check for modals in In Progress tab
         for idx, job in progress_jobs.iterrows():
             if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'])
+                show_job_details_modal(conn, job['id'], editable=(user['role'] in ['admin', 'manager']))
             if st.session_state.get(f"show_update_{job['id']}", False):
                 show_update_status_modal(conn, job['id'], st.session_state[f"show_update_{job['id']}"])
     
@@ -172,4 +181,3 @@ def view_jobs_tab(conn, user):
         for idx, job in completed_jobs.iterrows():
             if st.session_state.get(f"show_details_{job['id']}", False):
                 show_job_details_modal(conn, job['id'], editable=False)
-

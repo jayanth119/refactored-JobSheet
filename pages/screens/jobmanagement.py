@@ -20,17 +20,35 @@ def jobs_management():
             <p>Manage repair jobs for {user['store_name'] if user.get('store_id') else 'all stores'}</p>
         </div>
     ''', unsafe_allow_html=True)
+ 
+    if user['role'] == 'technician':
+        tab1, tab2 = st.tabs([ "📋 View Jobs" , "📝 Add New Job"])
+        db = DatabaseManager()
+        conn = db.get_connection()
 
-    tab1, tab2 = st.tabs(["📝 Add New Job", "📋 View Jobs"])
+        with tab2:
+            st.error("🚫 Access Denied: Technicians don't have access to job management.")
+            st.info("Please contact your manager or admin for access to job management.")
+
+        with tab1:
+                view_jobs_tab(conn, user)
+        
+
+        return
+    else :
+        tab1, tab2 = st.tabs(["📝 Add New Job", "📋 View Jobs"])
     
-    db = DatabaseManager()
-    conn = db.get_connection()
+        db = DatabaseManager()
+        conn = db.get_connection()
 
-    with tab2:
-        view_jobs_tab(conn, user)
+        with tab2:
+                view_jobs_tab(conn, user)
 
-    with tab1:
-        create_job_tab(conn, user, db)
+        with tab1:
+                create_job_tab(conn, user, db)
+        
+
+
 
     conn.close()
 
