@@ -6,6 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.jobdetailmodal import show_job_details_modal
 from components.datamanager.databasemanger import DatabaseManager
 from components.updatestatusmodal import show_update_status_modal
+from components.utils.pdf import generate_invoice_pdf_stream 
+
 # Database connection manager
 db = DatabaseManager()
 conn = db.get_connection()
@@ -35,7 +37,7 @@ def view_jobs_tab(conn, user):
             j.device_model,
             j.problem_description,
             j.status,
-            j.estimated_cost,
+            j.deposit_cost,
             j.raw_cost,
             j.actual_cost,
             u.full_name AS technician,
@@ -102,7 +104,7 @@ def view_jobs_tab(conn, user):
                         
                         st.markdown(f"""
                             **💰 Costs:**  
-                            - Estimated: ${job['estimated_cost'] or 0:.2f}  
+                            - Deposit: ${job['deposit_cost'] or 0:.2f}  
                             - Raw: ${job['raw_cost'] or 0:.2f}  
                             - Final: ${job['actual_cost'] or 0:.2f}  
                             - <strong style="color:{profit_color}">Profit: ${profit:.2f}</strong>
@@ -114,48 +116,81 @@ def view_jobs_tab(conn, user):
                     
                     with col3:
                         # View Details button
-                        if st.button(f"👁️ View", key=f"view_{job['id']}"):
+                        if st.button(f"👁️ View", key=f"view_{job['id']}_{tab_status}"):
+                            # Clear other modal states
+                            for key in list(st.session_state.keys()):
+                                if key.startswith("show_details_") or key.startswith("show_update_"):
+                                    del st.session_state[key]
                             st.session_state[f"show_details_{job['id']}"] = True
+                            st.rerun()
+                        
+                        # Download invoice button for completed jobs only
+                        if tab_status == "Completed":
+                            try:
+                                # Verify job exists before generating PDF
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT id FROM jobs WHERE id = ?", (job['id'],))
+                                if cursor.fetchone():
+                                    pdf_bytes = generate_invoice_pdf_stream(job['id'])
+                                    st.download_button(
+                                        "📥 Download Invoice", 
+                                        data=pdf_bytes, 
+                                        file_name=f"invoice_job_{job['id']}.pdf", 
+                                        mime="application/pdf",
+                                        key=f"download_{job['id']}_{tab_status}"
+                                    )
+                                else:
+                                    st.error("Job not found")
+                            except Exception as e:
+                                st.error(f"Error generating invoice: {str(e)}")
                         
                         # Status change buttons based on current status and user role
                         if user['role'] in ['admin', 'manager', 'technician']:
                             if tab_status == "New":
-                                if st.button(f"▶️ Start", key=f"start_{job['id']}", type="primary"):
+                                if st.button(f"▶️ Start", key=f"start_{job['id']}_{tab_status}", type="primary"):
+                                    # Clear other modal states
+                                    for key in list(st.session_state.keys()):
+                                        if key.startswith("show_details_") or key.startswith("show_update_"):
+                                            del st.session_state[key]
                                     st.session_state[f"show_update_{job['id']}"] = "In Progress"
                                     st.rerun()
                             
                             elif tab_status == "In Progress":
-                                if st.button(f"✅ Complete", key=f"complete_{job['id']}", type="primary"):
+                                if st.button(f"✅ Complete", key=f"complete_{job['id']}_{tab_status}", type="primary"):
+                                    # Clear other modal states
+                                    for key in list(st.session_state.keys()):
+                                        if key.startswith("show_details_") or key.startswith("show_update_"):
+                                            del st.session_state[key]
                                     st.session_state[f"show_update_{job['id']}"] = "Completed"
                                     st.rerun()
         else:
             st.info(f"No {tab_status.lower()} jobs found.")
+
+    # Check for active modals (only one at a time)
+    active_modal = None
+    active_job_id = None
+    
+    for key, value in st.session_state.items():
+        if key.startswith("show_details_") and value:
+            active_modal = "details"
+            active_job_id = int(key.replace("show_details_", ""))
+            break
+        elif key.startswith("show_update_") and value:
+            active_modal = "update"
+            active_job_id = int(key.replace("show_update_", ""))
+            break
     
     # Tab 1: New Jobs
     with tab1:
         new_jobs = get_jobs_by_status("New")
         st.markdown(f"**Total New Jobs: {len(new_jobs)}**")
         display_job_card(new_jobs, "New")
-        
-        # Check for modals in New Jobs tab
-        for idx, job in new_jobs.iterrows():
-            if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'], editable=(user['role'] in ['admin', 'manager']))
-            if st.session_state.get(f"show_update_{job['id']}", False):
-                show_update_status_modal(conn, job['id'], st.session_state[f"show_update_{job['id']}"])
     
     # Tab 2: In Progress Jobs  
     with tab2:
         progress_jobs = get_jobs_by_status("In Progress")
         st.markdown(f"**Total In Progress: {len(progress_jobs)}**")
         display_job_card(progress_jobs, "In Progress")
-        
-        # Check for modals in In Progress tab
-        for idx, job in progress_jobs.iterrows():
-            if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'], editable=(user['role'] in ['admin', 'manager']))
-            if st.session_state.get(f"show_update_{job['id']}", False):
-                show_update_status_modal(conn, job['id'], st.session_state[f"show_update_{job['id']}"])
     
     # Tab 3: Completed Jobs
     with tab3:
@@ -176,8 +211,10 @@ def view_jobs_tab(conn, user):
                 st.metric("Jobs Completed", len(completed_jobs))
         
         display_job_card(completed_jobs, "Completed")
-        
-        # Check for modals in Completed tab
-        for idx, job in completed_jobs.iterrows():
-            if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'], editable=False)
+    
+    # Handle modals outside of tabs to avoid conflicts
+    if active_modal == "details" and active_job_id:
+        show_job_details_modal(conn, active_job_id, editable=(user['role'] in ['admin', 'manager']))
+    elif active_modal == "update" and active_job_id:
+        status_to_update = st.session_state[f"show_update_{active_job_id}"]
+        show_update_status_modal(conn, active_job_id, status_to_update)

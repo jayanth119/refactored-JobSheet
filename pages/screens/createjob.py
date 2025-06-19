@@ -71,7 +71,7 @@ def create_job_tab(conn, user, db):
         problem_description = st.text_area("Problem Description*", placeholder="Describe the issue in detail...", height=100)
         col1, col2 = st.columns(2)
         with col1:
-            estimated_cost = st.number_input("Estimated Cost ($)", min_value=0.0, value=0.0, step=5.0)
+            deposit_cost = st.number_input("Deposit Amount ($)", min_value=0.0, value=0.0, step=5.0)
         with col2:
             actual_cost = st.number_input("Actual Cost ($)", min_value=0.0, value=0.0, step=5.0)
 
@@ -122,7 +122,7 @@ def create_job_tab(conn, user, db):
                             'device_password_type': device_password_type,
                             'device_password': device_password,
                             'problem_description': problem_description,
-                            'estimated_cost': estimated_cost,
+                            'deposit_cost': deposit_cost,
                             'actual_cost': actual_cost,
                             'technician_id': technician_assignment,
                             'notification_methods': notification_methods,

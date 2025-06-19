@@ -66,13 +66,13 @@ def create_job_in_database(conn, db, user, job_data, uploaded_photos):
             INSERT INTO jobs (
                 customer_id, store_id, device_type, device_model,
                 device_password_type, device_password,
-                problem_description, estimated_cost, actual_cost,
+                problem_description, deposit_cost, actual_cost,
                 notification_methods, status, created_at, updated_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ''', (
             customer_id, store_id, job_data['device_type'], job_data['device_model'],
             job_data['device_password_type'], job_data['device_password'],
-            job_data['problem_description'], job_data['estimated_cost'], 
+            job_data['problem_description'], job_data['deposit_cost'], 
             job_data['actual_cost'], ','.join(job_data['notification_methods'])
         ))
         

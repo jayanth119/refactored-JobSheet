@@ -224,7 +224,7 @@ def technician_performance(conn, where_clause, params, user_id):
                 j.device_type,
                 j.device_model,
                 j.problem_description,
-                j.estimated_cost,
+                j.deposit_cost,
                 j.raw_cost,
                 j.actual_cost,
                 j.status,
@@ -262,7 +262,7 @@ def technician_performance(conn, where_clause, params, user_id):
                 'device_type': job[2],
                 'device_model': job[3],
                 'problem_description': job[4],
-                'estimated_cost': job[5] or 0,
+                'deposit_cost': job[5] or 0,
                 'raw_cost': job[6] or 0,
                 'actual_cost': job[7] or 0,
                 'status': job[8],
@@ -288,7 +288,7 @@ def technician_performance(conn, where_clause, params, user_id):
         pending_jobs = len([j for j in job_list if j['status'] in ['New', 'Assigned']])
         
         # Revenue metrics
-        total_estimated_revenue = sum(j['estimated_cost'] for j in job_list)
+        total_estimated_revenue = sum(j['deposit_cost'] for j in job_list)
         total_actual_revenue = sum(j['actual_cost'] for j in job_list if j['actual_cost'])
         
         # Completion rate
@@ -330,7 +330,7 @@ def technician_performance(conn, where_clause, params, user_id):
             
             stats = technician_stats[tech_id]
             stats['total_jobs'] += 1
-            stats['estimated_revenue'] += job['estimated_cost']
+            stats['estimated_revenue'] += job['deposit_cost']
             stats['total_revenue'] += job['actual_cost'] or 0
             
             if job['status'] == 'Completed':

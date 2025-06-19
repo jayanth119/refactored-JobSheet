@@ -11,7 +11,7 @@ def show_update_status_modal(conn, job_id, new_status):
         cursor = conn.cursor()
         cursor.execute('''
             SELECT 
-                j.id, j.status, j.estimated_cost, j.raw_cost, j.actual_cost,
+                j.id, j.status, j.deposit_cost, j.raw_cost, j.actual_cost,
                 c.name AS customer_name, j.device_type, j.device_model
             FROM jobs j
             JOIN customers c ON j.customer_id = c.id

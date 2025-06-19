@@ -39,7 +39,7 @@ def show_job_details_modal(conn, job_id ,editable=True):
         j.id, j.created_at, j.updated_at, j.completed_at,
         j.device_type, j.device_model, j.device_password_type, j.device_password,
         j.notification_methods, j.problem_description, j.status,
-        j.estimated_cost, j.raw_cost, j.actual_cost,
+        j.deposit_cost, j.raw_cost, j.actual_cost,
         c.name AS customer_name, c.phone AS customer_phone,
         c.email AS customer_email, c.address AS customer_address,
         s.name AS store_name, s.location AS store_location,
@@ -127,25 +127,24 @@ def show_job_details_modal(conn, job_id ,editable=True):
             st.divider()
 
             # Financials
-            st.markdown("### 💰 Financial Details")
-            estimated = job_details[11] or 0
-            raw = job_details[12] or 0  
-            actual = job_details[13] or 0
-            profit = actual - raw
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Estimated Cost", f"${estimated:.2f}")
-            with col2:
-                st.metric("Raw Cost", f"${raw:.2f}")
-            with col3:
-                st.metric("Final Cost", f"${actual:.2f}")
-            with col4:
-                profit_color = "normal" if profit >= 0 else "inverse"
-                st.metric("Profit", f"${profit:.2f}", delta=f"${profit:.2f}", delta_color=profit_color)
-            if actual > 0:
-                margin = (profit / actual) * 100
-                margin_color = "🟢" if margin > 30 else "🟡" if margin > 10 else "🔴"
-                st.markdown(f"**Profit Margin:** {margin_color} {margin:.1f}%")
+            if editable :
+                st.markdown("### 💰 Financial Details")
+                estimated = job_details[11] or 0
+                raw = job_details[12] or 0  
+                actual = job_details[13] or 0
+                profit = actual - raw
+                col = st.columns(1)[0]
+                with col:
+                    st.metric("Deposit Amount", f"${estimated:.2f}")
+                    st.metric("Raw Cost", f"${raw:.2f}")
+                    st.metric("Final Amount", f"${actual:.2f}")
+                    profit_color = "normal" if profit >= 0 else "inverse"
+                    st.metric("Profit", f"${profit:.2f}", delta=f"${profit:.2f}", delta_color=profit_color)
+
+                    if actual > 0:
+                        margin = (profit / actual) * 100
+                        margin_color = "🟢" if margin > 30 else "🟡" if margin > 10 else "🔴"
+                        st.markdown(f"**Profit Margin:** {margin_color} {margin:.1f}%")
 
             # Timeline
             if job_details[2] or job_details[3]:

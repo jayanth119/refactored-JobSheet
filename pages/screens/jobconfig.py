@@ -70,7 +70,7 @@ def job_schema_config():
             ('serial_number', 'Serial/IMEI Number', 'text', False, True, False, 7, '', ''),
             ('problem_description', 'Problem Description', 'textarea', True, True, False, 8, '', ''),
             ('diagnostic_notes', 'Initial Diagnostic Notes', 'textarea', False, True, False, 9, '', ''),
-            ('estimated_cost', 'Estimated Cost ($)', 'number', True, True, False, 10, '', ''),
+            ('deposit_cost', 'Deposit Cost ($)', 'number', True, True, False, 10, '', ''),
             ('deposit_amount', 'Deposit Amount ($)', 'number', False, True, False, 11, '', ''),
             ('notification_method', 'Notification Method', 'checkbox', False, True, False, 12, 'Email,WhatsApp,SMS,Phone Call', ''),
             ('phone_received_by', 'Phone Received By', 'text', True, True, False, 13, '', ''),

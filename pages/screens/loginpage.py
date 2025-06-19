@@ -25,6 +25,32 @@ def login_signup_page():
             <p>Professional Repair Shop Management System</p>
         </div>
     """, unsafe_allow_html=True)
+    hide_sidebar_style = """
+    <style>
+        /* Hide the sidebar completely */
+        [data-testid="stSidebar"] {
+            display: none !important;
+        }
+
+        /* Hide the sidebar toggle (arrow) */
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+
+        /* Hide Streamlit header and footer */
+        header, footer, [data-testid="stHeader"] {
+            visibility: hidden;
+        }
+
+        /* Prevent white space where sidebar was */
+        .block-container {
+            padding-left: 2rem !important;
+            padding-right: 2rem !important;
+        }
+    </style>
+"""
+
+    st.markdown(hide_sidebar_style, unsafe_allow_html=True)
     
     # Only show login tab initially
     tab1 = st.tabs(["🔐 Sign In"])[0]
