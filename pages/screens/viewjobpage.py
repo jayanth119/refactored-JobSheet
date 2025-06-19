@@ -171,5 +171,5 @@ def view_jobs_tab(conn, user):
         # Check for modals in Completed tab
         for idx, job in completed_jobs.iterrows():
             if st.session_state.get(f"show_details_{job['id']}", False):
-                show_job_details_modal(conn, job['id'])
+                show_job_details_modal(conn, job['id'], editable=False)
 

@@ -30,7 +30,7 @@ def visualize_pattern(pattern_str):
     rows = [" ".join(row) for row in grid]
     return "\n".join(rows)
 
-def show_job_details_modal(conn, job_id):
+def show_job_details_modal(conn, job_id ,editable=True):
     """Show complete job details in a centered modal dialog with photos"""
     cursor = conn.cursor()
     
@@ -171,24 +171,25 @@ def show_job_details_modal(conn, job_id):
             st.divider()
 
             # Action buttons
-            col1, col2, col3 = st.columns([1, 1, 1])
-            with col1:
-                if job_details[10] == "New":
-                    if st.button("▶️ Start Job", key=f"modal_start_{job_id}", type="primary"):
+            if editable : 
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col1:
+                    if job_details[10] == "New":
+                        if st.button("▶️ Start Job", key=f"modal_start_{job_id}", type="primary"):
+                            st.session_state[f"show_details_{job_id}"] = False
+                            st.session_state[f"show_update_{job_id}"] = "In Progress"
+                            st.rerun()
+                with col2:
+                    if job_details[10] == "In Progress":
+                        if st.button("✅ Complete Job", key=f"modal_complete_{job_id}", type="primary"):
+                            st.session_state[f"show_details_{job_id}"] = False
+                            st.session_state[f"show_update_{job_id}"] = "Completed"
+                            st.rerun()
+                with col3:
+                    if st.button("💰 Edit Costs", key=f"modal_edit_{job_id}"):
                         st.session_state[f"show_details_{job_id}"] = False
-                        st.session_state[f"show_update_{job_id}"] = "In Progress"
+                        st.session_state[f"show_update_{job_id}"] = job_details[10]
                         st.rerun()
-            with col2:
-                if job_details[10] == "In Progress":
-                    if st.button("✅ Complete Job", key=f"modal_complete_{job_id}", type="primary"):
-                        st.session_state[f"show_details_{job_id}"] = False
-                        st.session_state[f"show_update_{job_id}"] = "Completed"
-                        st.rerun()
-            with col3:
-                if st.button("💰 Edit Costs", key=f"modal_edit_{job_id}"):
-                    st.session_state[f"show_details_{job_id}"] = False
-                    st.session_state[f"show_update_{job_id}"] = job_details[10]
-                    st.rerun()
 
         job_details_dialog()
     else:

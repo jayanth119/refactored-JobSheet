@@ -45,17 +45,6 @@ def sidebar_navigation():
         "user": "Customer User"
     }
 
-    role_description = profession_display.get(user['role'], "Professional")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"""
-        <div style="background: #ffffff11; padding: 1rem; border-radius: 10px; text-align: center;">
-            <div style="color: white; font-weight: bold; font-size: 1rem;">🧑‍💼 {role_description}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.sidebar.markdown("---")
-
     # Navigation menu
     if user['role'] == 'admin':
         menu_items = {
@@ -84,7 +73,15 @@ def sidebar_navigation():
             "⚙️ Settings": "settings"
         }
 
-    selected = st.sidebar.radio("Navigation", list(menu_items.keys()))
+    role_description = profession_display.get(user['role'], "Professional")
+    selected = st.sidebar.radio("Menu", list(menu_items.keys()))
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"""
+        <div style="background: #ffffff11; padding: 1rem; border-radius: 10px; text-align: center;">
+            <div style="color: white; font-weight: bold; font-size: 1rem;">🧑‍💼 {role_description}</div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.sidebar.markdown("---")
 

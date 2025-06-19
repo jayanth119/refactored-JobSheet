@@ -9,14 +9,14 @@ def send_job_status_email(conn: str, job_id: int):
     an update based on the job's status.
 
     Args:
-        db_path (str): Path to your SQLite database file.
+        conn (str): The SQLite DB connection string.
         job_id (int): The ID of the job to notify about.
     """
     # --- SMTP CONFIG ---
     SMTP_SERVER   = "smtp.gmail.com"
     SMTP_PORT     = 587
     SENDER_EMAIL  = "jayanthunofficial@gmail.com"
-  # replace with your Gmail app password
+    SENDER_PASS   = "qxhx qwhd aobk xgqf"  # replace with your Gmail app password
 
     # --- Connect & fetch ---
     cur  = conn.cursor()

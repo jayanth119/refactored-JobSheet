@@ -27,7 +27,18 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-
+            cursor.execute("""
+                           CREATE TABLE IF NOT EXISTS user_stores (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            store_id INTEGER NOT NULL,
+                            is_primary BOOLEAN DEFAULT 0,
+                            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                            FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, store_id)
+                        )
+                           """)
             # === USERS TABLE ===
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
