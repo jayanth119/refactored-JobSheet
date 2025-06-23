@@ -5,3 +5,5 @@ reportlab
 twilio
 requests
 sendgrid
+num2words
+qrcode 

@@ -100,7 +100,7 @@ def send_job_status_email(conn: sqlite3.Connection, job_id: int, base_url="http:
     # --- If status is "Completed", attach PDF ---
     if status == "Completed":
         try:
-            pdf_buffer = generate_invoice_pdf_stream(job_id)
+            pdf_buffer = generate_invoice_pdf_stream(job_id,status=status)
             invoice = MIMEApplication(pdf_buffer.read(), _subtype="pdf")
             invoice.add_header("Content-Disposition", "attachment", filename=f"invoice_job_{job_id}.pdf")
             msg.attach(invoice)

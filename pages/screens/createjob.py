@@ -7,6 +7,8 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.utils.createjob import create_job_in_database
 from components.notifications.email_utils import send_job_status_email
+from components.utils.models import models
+from components.billpreview import display_bill_preview
 
 def create_job_tab(conn, user, db):
     st.markdown("### Create New Repair Job")
@@ -24,6 +26,20 @@ def create_job_tab(conn, user, db):
                 st.session_state.job_created_successfully = False
                 st.session_state.job_form_data = {}
                 st.rerun()
+        
+        # Display the bill preview after successful job creation
+        display_bill_preview(
+            conn, 
+            st.session_state.last_created_job_id, 
+            st.session_state.job_form_data['customer_name'],
+            st.session_state.job_form_data['customer_phone'],
+            st.session_state.job_form_data['device_type'],
+            st.session_state.job_form_data['device_model'],
+            st.session_state.job_form_data['problem_description'],
+            st.session_state.job_form_data['deposit_cost'],
+            st.session_state.job_form_data['actual_cost'],
+            status= "New"
+        )
         st.divider()
         return
 
@@ -35,13 +51,15 @@ def create_job_tab(conn, user, db):
     device_password = password_section['value']
     if device_password:
         st.success("🔒 Password/PIN captured - will be stored securely")
+    
     st.markdown("#### 📱 Device Information")
     col1, col2 = st.columns(2)
 
     with col1:
-            device_type = st.selectbox("Device Type*", ["Smartphone", "Tablet", "Laptop", "Desktop", "Watch", "Other"], index=0)
+        device_type = st.selectbox("Device Type*", ["Smartphone", "Tablet", "Laptop", "Desktop", "Watch", "Other"], index=0)
     with col2:
-            device_model = st.text_input("Device Model", placeholder="e.g., iPhone 14, Samsung Galaxy S23")
+        device_model = st.selectbox("Device Model", models)
+    
     with st.form("new_job_form", clear_on_submit=False):
         st.markdown("#### 👤 Customer Information")
         col1, col2 = st.columns(2)
@@ -109,6 +127,19 @@ def create_job_tab(conn, user, db):
             if errors:
                 st.error("⚠️ Please fix the following errors:\n" + "\n".join(f"• {error}" for error in errors))
             else:
+                # Store form data in session state
+                st.session_state.job_form_data = {
+                    'customer_name': customer_name,
+                    'customer_phone': customer_phone,
+                    'customer_email': customer_email,
+                    'customer_address': customer_address,
+                    'device_type': device_type,
+                    'device_model': device_model,
+                    'problem_description': problem_description,
+                    'deposit_cost': deposit_cost,
+                    'actual_cost': actual_cost
+                }
+                
                 with st.spinner("Creating job and processing uploads..."):
                     success, job_id = create_job_in_database(
                         conn, db, user,
@@ -131,18 +162,22 @@ def create_job_tab(conn, user, db):
                         },
                         uploaded_photos
                     )
+                    
                 if success:      
                     send_job_status_email(conn, job_id)
                     st.session_state.job_created_successfully = True
                     st.session_state.last_created_job_id = job_id
+                    
                     if device_password:
                         st.success("🔒 Password/PIN uploaded and secured")
                     if uploaded_photos:
                         st.success(f"📸 {len(uploaded_photos)} photo(s) uploaded successfully")
                     if existing_customer_info:
                         st.success("👤 Existing customer details automatically applied")
-                    st.session_state.job_form_data = {}
+                    
                     st.rerun()
+
+
 
 def render_password_section():
     password_type = st.radio(
@@ -196,6 +231,7 @@ def render_technician_assignment(conn, user):
             WHERE st.is_active = 1 AND u.role = 'technician'
             ORDER BY u.full_name
         ''', conn)
+    
     if len(technicians_df) > 0:
         tech_options = [("Unassigned", None)]
         tech_options.extend([(f"{row['full_name']} ({row['email']})", row['id']) for _, row in technicians_df.iterrows()])

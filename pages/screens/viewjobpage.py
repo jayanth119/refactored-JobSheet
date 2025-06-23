@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
-import os 
-import sys 
+import os
+import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.jobdetailmodal import show_job_details_modal
 from components.datamanager.databasemanger import DatabaseManager
 from components.updatestatusmodal import show_update_status_modal
-from components.utils.pdf import generate_invoice_pdf_stream 
+from components.utils.pdf import generate_invoice_pdf_stream
+from components.billpreview import display_bill_preview
 
 # Database connection manager
 db = DatabaseManager()
@@ -41,7 +42,8 @@ def view_jobs_tab(conn, user):
             j.raw_cost,
             j.actual_cost,
             u.full_name AS technician,
-            s.name AS store_name
+            s.name AS store_name,
+            s.location AS store_location
         FROM jobs j
         JOIN customers c ON j.customer_id = c.id
         LEFT JOIN stores s ON j.store_id = s.id
@@ -55,15 +57,12 @@ def view_jobs_tab(conn, user):
         
         # Role-based filtering
         if user['role'] == 'admin':
-            # Admins can see all jobs
             pass
         elif user['role'] in ['manager', 'staff']:
-            # Managers and staff can only see jobs from their store(s)
             if user.get('store_id'):
                 base_query += " AND j.store_id = ?"
                 params.append(user['store_id'])
         elif user['role'] == 'technician':
-            # Technicians can only see jobs assigned to them
             base_query += " AND ta.technician_id = ?"
             params.append(user['id'])
         
@@ -117,21 +116,28 @@ def view_jobs_tab(conn, user):
                     with col3:
                         # View Details button
                         if st.button(f"👁️ View", key=f"view_{job['id']}_{tab_status}"):
-                            # Clear other modal states
                             for key in list(st.session_state.keys()):
-                                if key.startswith("show_details_") or key.startswith("show_update_"):
+                                if key.startswith("show_details_") or key.startswith("show_update_") or key.startswith("show_preview_"):
                                     del st.session_state[key]
                             st.session_state[f"show_details_{job['id']}"] = True
                             st.rerun()
                         
+                        # Bill Preview button for New and In Progress jobs
+                        if tab_status in ["New", "In Progress"]:
+                            if st.button(f"📋 Bill Preview", key=f"preview_{job['id']}_{tab_status}"):
+                                for key in list(st.session_state.keys()):
+                                    if key.startswith("show_details_") or key.startswith("show_update_") or key.startswith("show_preview_"):
+                                        del st.session_state[key]
+                                st.session_state[f"show_preview_{job['id']}"] = True
+                                st.rerun()
+                        
                         # Download invoice button for completed jobs only
                         if tab_status == "Completed":
                             try:
-                                # Verify job exists before generating PDF
                                 cursor = conn.cursor()
                                 cursor.execute("SELECT id FROM jobs WHERE id = ?", (job['id'],))
                                 if cursor.fetchone():
-                                    pdf_bytes = generate_invoice_pdf_stream(job['id'])
+                                    pdf_bytes = generate_invoice_pdf_stream(job['id'], status=tab_status)
                                     st.download_button(
                                         "📥 Download Invoice", 
                                         data=pdf_bytes, 
@@ -144,29 +150,80 @@ def view_jobs_tab(conn, user):
                             except Exception as e:
                                 st.error(f"Error generating invoice: {str(e)}")
                         
-                        # Status change buttons based on current status and user role
+                        # Status change buttons
                         if user['role'] in ['admin', 'manager', 'technician']:
                             if tab_status == "New":
                                 if st.button(f"▶️ Start", key=f"start_{job['id']}_{tab_status}", type="primary"):
-                                    # Clear other modal states
-                                    for key in list(st.session_state.keys()):
-                                        if key.startswith("show_details_") or key.startswith("show_update_"):
-                                            del st.session_state[key]
                                     st.session_state[f"show_update_{job['id']}"] = "In Progress"
                                     st.rerun()
                             
                             elif tab_status == "In Progress":
                                 if st.button(f"✅ Complete", key=f"complete_{job['id']}_{tab_status}", type="primary"):
-                                    # Clear other modal states
-                                    for key in list(st.session_state.keys()):
-                                        if key.startswith("show_details_") or key.startswith("show_update_"):
-                                            del st.session_state[key]
                                     st.session_state[f"show_update_{job['id']}"] = "Completed"
                                     st.rerun()
+
+                    # Bill Preview Dialog
+                    # if st.session_state.get(f"show_preview_{job['id']}", False):
+                    #     # Add CSS for the modal overlay
+                    #     st.markdown("""
+                    #         <style>
+                    #         .modal-overlay {
+                    #             position: fixed;
+                    #             top: 0;
+                    #             left: 0;
+                    #             right: 0;
+                    #             bottom: 0;
+                    #             background-color: rgba(0,0,0,0.5);
+                    #             display: flex;
+                    #             justify-content: center;
+                    #             align-items: center;
+                    #             z-index: 1000;
+                    #         }
+                    #         .modal-content {
+                    #             background-color: white;
+                    #             padding: 20px;
+                    #             border-radius: 10px;
+                    #             width: 80%;
+                    #             max-width: 800px;
+                    #             max-height: 80vh;
+                    #             overflow-y: auto;
+                    #         }
+                    #         </style>
+                    #         """, unsafe_allow_html=True)
+                        
+                    #     # Modal container
+                    #     st.markdown("""
+                    #         <div class="modal-overlay">
+                    #             <div class="modal-content">
+                    #     """, unsafe_allow_html=True)
+                        
+                    #     # Display the bill preview content
+                    #     display_bill_preview(
+                    #         conn,
+                    #         job['id'],
+                    #         job['customer_name'],
+                    #         job['customer_phone'],
+                    #         job['device_type'],
+                    #         job['device_model'],
+                    #         job['problem_description'],
+                    #         job['deposit_cost'],
+                    #         job['actual_cost'],
+                    #         tab_status
+                    #     )
+                        
+                    #     # Close button
+                    #     if st.button("Close Preview", key=f"close_preview_{job['id']}"):
+                    #         st.session_state[f"show_preview_{job['id']}"] = False
+                    #         st.rerun()
+                        
+                    #     st.markdown("""
+                    #             </div>
+                    #         </div>
+                    #         """, unsafe_allow_html=True)
         else:
             st.info(f"No {tab_status.lower()} jobs found.")
 
-    # Check for active modals (only one at a time)
+    # Check for active modals
     active_modal = None
     active_job_id = None
     
@@ -198,7 +255,6 @@ def view_jobs_tab(conn, user):
         st.markdown(f"**Total Completed: {len(completed_jobs)}**")
         
         if len(completed_jobs) > 0:
-            # Show profit summary for completed jobs
             total_profit = (completed_jobs['actual_cost'].fillna(0) - completed_jobs['raw_cost'].fillna(0)).sum()
             avg_profit = total_profit / len(completed_jobs) if len(completed_jobs) > 0 else 0
             
@@ -212,7 +268,7 @@ def view_jobs_tab(conn, user):
         
         display_job_card(completed_jobs, "Completed")
     
-    # Handle modals outside of tabs to avoid conflicts
+    # Handle modals outside of tabs
     if active_modal == "details" and active_job_id:
         show_job_details_modal(conn, active_job_id, editable=(user['role'] in ['admin', 'manager']))
     elif active_modal == "update" and active_job_id:

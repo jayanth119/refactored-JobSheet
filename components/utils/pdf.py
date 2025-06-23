@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.datamanager.databasemanger import DatabaseManager
 
 
-def generate_invoice_pdf_stream(job_id: int, base_url="http://localhost:8501/repair_status?") -> BytesIO:
+def generate_invoice_pdf_stream(job_id: int,  status:str,  base_url="http://localhost:8501/repair_status?" ) -> BytesIO:
     """
     Generate invoice PDF for a job with improved error handling
     """
@@ -182,18 +182,19 @@ def generate_invoice_pdf_stream(job_id: int, base_url="http://localhost:8501/rep
         c.drawString(30, height - 435, amount_words)
 
         # Payment status
-        c.setFont("Helvetica", 10)
-        c.drawString(30, height - 460, f"Status: {status}")
-        c.drawString(30, height - 475, "Payment: PAID" if status == "Completed" else "Payment: PENDING")
+        if status == "Completed":
+                c.setFont("Helvetica", 10)
+                c.drawString(30, height - 460, f"Status: {status}")
+                c.drawString(30, height - 475, "Payment: PAID" if status == "Completed" else "Payment: PENDING")
 
-        # Footer
-        c.line(30, height - 500, width - 30, height - 500)
-        c.setFont("Helvetica", 8)
-        c.drawString(30, height - 515, "Thank you for your business!")
-        
-        # Signature line
-        c.line(width - 200, height - 540, width - 50, height - 540)
-        c.drawString(width - 150, height - 555, "Authorized Signature")
+                # Footer
+                c.line(30, height - 500, width - 30, height - 500)
+                c.setFont("Helvetica", 8)
+                c.drawString(30, height - 515, "Thank you for your business!")
+                
+                # Signature line
+                c.line(width - 200, height - 540, width - 50, height - 540)
+                c.drawString(width - 150, height - 555, "Authorized Signature")
 
         c.save()
         buffer.seek(0)
