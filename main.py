@@ -17,6 +17,7 @@ from pages.screens.reportmanagement import reports_management
 from pages.screens.settingpage import settings_page
 from pages.screens.usermanagement import user_management
 from components.sidebarnavigation import sidebar_navigation
+from pages.screens.techniciandashboard import technician_dashboard
 
 st.set_page_config(
     page_title="RepairPro - Management System",
@@ -56,10 +57,14 @@ def main():
 
         current_page = sidebar_navigation()
         if current_page == "dashboard":
-            if st.session_state.user['role'] == 'admin':
+            if st.session_state.user['role'] == 'admin' or st.session_state.user['role'] == 'manager':
                 admin_dashboard(st)
-            else:
+            elif (st.session_state.user['role'] == 'staff'):
                 staff_dashboard()
+            elif (st.session_state.user['role'] == 'technician'):
+                technician_dashboard() 
+                
+                
         elif current_page == "jobs":
             jobs_management()
         elif current_page == "customers":

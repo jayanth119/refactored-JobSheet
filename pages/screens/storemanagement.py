@@ -3,6 +3,8 @@ import os
 import pandas as pd 
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.css.css import Style
 from components.datamanager.databasemanger import DatabaseManager
@@ -25,7 +27,7 @@ def store_management():
         </div>
     ''', unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["🏪 View Stores", "➕ Add Store", "📊 Store Analytics"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏪 View Stores", "➕ Add Store", "📊 Store Analytics", "📱 Device Analytics", "🔧 Repair Analytics"])
     
     db = DatabaseManager()
     conn = db.get_connection()
@@ -210,5 +212,261 @@ def store_management():
                 st.info(f"No completed jobs data available for {selected_store}")
         else:
             st.info("No store performance data available")
+    
+    with tab4:
+        st.markdown("### Device Types Analytics")
+        
+        # Device type distribution across all stores
+        device_query = """
+            SELECT s.name as store_name, j.device_type, j.device_model,
+                   COUNT(*) as job_count,
+                   COUNT(CASE WHEN j.status = 'Completed' THEN 1 END) as completed_count,
+                   AVG(CASE WHEN j.status = 'Completed' THEN j.actual_cost END) as avg_repair_cost,
+                   SUM(CASE WHEN j.status = 'Completed' THEN j.actual_cost ELSE 0 END) as total_revenue
+            FROM jobs j
+            JOIN stores s ON j.store_id = s.id
+            WHERE j.device_type IS NOT NULL AND j.device_type != ''
+            GROUP BY s.name, j.device_type, j.device_model
+            ORDER BY job_count DESC
+        """
+        
+        device_data = pd.read_sql(device_query, conn)
+        
+        if not device_data.empty:
+            # Overall device type distribution
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### Device Types Distribution")
+                device_summary = device_data.groupby('device_type').agg({
+                    'job_count': 'sum',
+                    'completed_count': 'sum',
+                    'total_revenue': 'sum'
+                }).reset_index()
+                
+                fig = px.pie(device_summary, values='job_count', names='device_type',
+                           title="Jobs by Device Type")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("#### Revenue by Device Type")
+                fig = px.bar(device_summary, x='device_type', y='total_revenue',
+                           title="Revenue by Device Type",
+                           color='device_type')
+                fig.update_layout(showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Device models breakdown
+            st.markdown("#### Most Common Device Models")
+            model_summary = device_data.groupby(['device_type', 'device_model']).agg({
+                'job_count': 'sum',
+                'avg_repair_cost': 'mean'
+            }).reset_index().sort_values('job_count', ascending=False).head(15)
+            
+            fig = px.bar(model_summary, x='device_model', y='job_count',
+                        color='device_type', title="Top 15 Device Models by Job Count")
+            fig.update_xaxes(tickangle=45)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Store-wise device preferences
+            st.markdown("#### Device Types by Store")
+            store_device_pivot = device_data.pivot_table(
+                index='store_name', 
+                columns='device_type', 
+                values='job_count', 
+                fill_value=0
+            )
+            
+            fig = px.imshow(store_device_pivot.values,
+                           x=store_device_pivot.columns,
+                           y=store_device_pivot.index,
+                           color_continuous_scale='Blues',
+                           title="Device Type Distribution Across Stores")
+            fig.update_layout(
+                xaxis_title="Device Type",
+                yaxis_title="Store"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Detailed device analysis table
+            st.markdown("#### Detailed Device Analysis")
+            device_analysis = device_data.groupby(['device_type', 'device_model']).agg({
+                'job_count': 'sum',
+                'completed_count': 'sum',
+                'avg_repair_cost': 'mean',
+                'total_revenue': 'sum'
+            }).reset_index()
+            
+            device_analysis['completion_rate'] = (device_analysis['completed_count'] / device_analysis['job_count'] * 100).round(2)
+            device_analysis['avg_repair_cost'] = device_analysis['avg_repair_cost'].round(2)
+            device_analysis['total_revenue'] = device_analysis['total_revenue'].round(2)
+            
+            device_analysis = device_analysis.sort_values('total_revenue', ascending=False)
+            
+            st.dataframe(
+                device_analysis,
+                column_config={
+                    "device_type": "Device Type",
+                    "device_model": "Model",
+                    "job_count": "Total Jobs",
+                    "completed_count": "Completed",
+                    "completion_rate": st.column_config.NumberColumn("Completion Rate (%)", format="%.1f%%"),
+                    "avg_repair_cost": st.column_config.NumberColumn("Avg Cost", format="$%.2f"),
+                    "total_revenue": st.column_config.NumberColumn("Total Revenue", format="$%.2f")
+                },
+                use_container_width=True
+            )
+            
+        else:
+            st.info("No device data available for analysis")
+    
+    with tab5:
+        st.markdown("### Repair Analytics")
+        
+        # Repair success rates and performance metrics
+        repair_query = """
+            SELECT s.name as store_name,
+                   j.status,
+                   j.device_type,
+                   COUNT(*) as count,
+                   AVG(j.actual_cost) as avg_cost,
+                   AVG(CASE 
+                       WHEN j.completed_at IS NOT NULL AND j.started_at IS NOT NULL 
+                       THEN (julianday(j.completed_at) - julianday(j.started_at))
+                       ELSE NULL 
+                   END) as avg_repair_days,
+                   SUM(j.actual_cost) as total_revenue
+            FROM jobs j
+            JOIN stores s ON j.store_id = s.id
+            GROUP BY s.name, j.status, j.device_type
+            ORDER BY s.name, count DESC
+        """
+        
+        repair_data = pd.read_sql(repair_query, conn)
+        
+        if not repair_data.empty:
+            # Repair status overview
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### Repair Status Distribution")
+                status_summary = repair_data.groupby('status')['count'].sum().reset_index()
+                fig = px.pie(status_summary, values='count', names='status',
+                           title="Overall Repair Status Distribution")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("#### Average Repair Time by Status")
+                time_data = repair_data[repair_data['avg_repair_days'].notna()]
+                if not time_data.empty:
+                    fig = px.bar(time_data.groupby('status')['avg_repair_days'].mean().reset_index(),
+                               x='status', y='avg_repair_days',
+                               title="Average Repair Time (Days)")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No repair time data available")
+            
+            # Success rate by store
+            st.markdown("#### Repair Success Rate by Store")
+            store_success = repair_data.pivot_table(
+                index='store_name',
+                columns='status',
+                values='count',
+                fill_value=0
+            )
+            
+            if 'Completed' in store_success.columns:
+                store_success['total_jobs'] = store_success.sum(axis=1)
+                store_success['success_rate'] = (store_success['Completed'] / store_success['total_jobs'] * 100).round(2)
+                
+                fig = px.bar(store_success.reset_index(), 
+                           x='store_name', y='success_rate',
+                           title="Repair Success Rate by Store (%)")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Repair complexity analysis
+            st.markdown("#### Repair Complexity Analysis")
+            
+            # Get repair time and cost correlation
+            complexity_query = """
+                SELECT j.device_type,
+                       AVG(j.actual_cost) as avg_cost,
+                       AVG(CASE 
+                           WHEN j.completed_at IS NOT NULL AND j.started_at IS NOT NULL 
+                           THEN (julianday(j.completed_at) - julianday(j.started_at))
+                           ELSE NULL 
+                       END) as avg_repair_days,
+                       COUNT(CASE WHEN j.status = 'Completed' THEN 1 END) as completed_jobs,
+                       COUNT(*) as total_jobs
+                FROM jobs j
+                WHERE j.status = 'Completed'
+                GROUP BY j.device_type
+                HAVING completed_jobs >= 5
+                ORDER BY avg_cost DESC
+            """
+            
+            complexity_data = pd.read_sql(complexity_query, conn)
+            
+            if not complexity_data.empty and complexity_data['avg_repair_days'].notna().any():
+                fig = px.scatter(complexity_data, 
+                               x='avg_repair_days', y='avg_cost',
+                               size='completed_jobs',
+                               hover_data=['device_type'],
+                               title="Repair Complexity: Time vs Cost",
+                               labels={'avg_repair_days': 'Average Repair Time (Days)',
+                                      'avg_cost': 'Average Repair Cost ($)'})
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Problem patterns analysis
+            st.markdown("#### Common Problem Patterns")
+            problem_query = """
+                SELECT SUBSTR(problem_description, 1, 50) as problem_preview,
+                       COUNT(*) as frequency,
+                       AVG(actual_cost) as avg_cost,
+                       device_type
+                FROM jobs
+                WHERE problem_description IS NOT NULL 
+                  AND problem_description != ''
+                  AND status = 'Completed'
+                GROUP BY SUBSTR(problem_description, 1, 50), device_type
+                HAVING frequency >= 2
+                ORDER BY frequency DESC
+                LIMIT 20
+            """
+            
+            problem_data = pd.read_sql(problem_query, conn)
+            
+            if not problem_data.empty:
+                st.dataframe(
+                    problem_data,
+                    column_config={
+                        "problem_preview": "Problem Description",
+                        "frequency": "Frequency",
+                        "avg_cost": st.column_config.NumberColumn("Avg Cost", format="$%.2f"),
+                        "device_type": "Device Type"
+                    },
+                    use_container_width=True
+                )
+            
+            # Monthly repair trends
+            st.markdown("#### Monthly Repair Trends")
+            monthly_repairs = pd.read_sql("""
+                SELECT strftime('%Y-%m', created_at) as month,
+                       status,
+                       COUNT(*) as job_count,
+                       SUM(actual_cost) as revenue
+                FROM jobs
+                WHERE created_at >= date('now', '-12 months')
+                GROUP BY strftime('%Y-%m', created_at), status
+                ORDER BY month
+            """, conn)
+            
+            if not monthly_repairs.empty:
+                fig = px.line(monthly_repairs, x='month', y='job_count',
+                            color='status', title="Monthly Repair Job Trends")
+                st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.info("No repair data available for analysis")
     
     conn.close()

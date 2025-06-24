@@ -114,7 +114,7 @@ def display_bill_preview(conn, job_id, customer_name, customer_phone, device_typ
     st.markdown("---")
     st.markdown("#### Status QR Code")
     try:
-        qr_url = f"http://localhost:8501/repair_status?job_id={job_id}"
+        qr_url = f"https://jayanth119-refactored-jobsheet-main-vtllnj.streamlit.app//repair_status?job_id={job_id}"
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,

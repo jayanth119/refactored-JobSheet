@@ -68,7 +68,6 @@ def sidebar_navigation():
         menu_items = {
             "🏠 Dashboard": "dashboard",
             "📋 Jobs": "jobs",
-            "📊 Reports": "reports",
             "⚙️ Settings": "settings"
         }
 

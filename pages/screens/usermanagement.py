@@ -98,7 +98,12 @@ def user_management():
             
             with col2:
                 new_password = st.text_input("Password*", type="password", placeholder="Set a password")
-                new_role = st.selectbox("Role*", ["staff", "admin"])
+                if(user['role'] == 'admin'):
+                    roles = ["staff", "admin" , "manager","technician"]
+                elif (user['role'] == 'manager'):
+                    roles = ["staff", "technician"]
+                
+                new_role = st.selectbox("Role*", roles)
                 
                 # Get stores for staff assignment
                 stores = pd.read_sql("SELECT id, name FROM stores", conn)

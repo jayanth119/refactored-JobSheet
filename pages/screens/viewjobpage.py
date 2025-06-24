@@ -121,16 +121,7 @@ def view_jobs_tab(conn, user):
                                     del st.session_state[key]
                             st.session_state[f"show_details_{job['id']}"] = True
                             st.rerun()
-                        
-                        # Bill Preview button for New and In Progress jobs
-                        if tab_status in ["New", "In Progress"]:
-                            if st.button(f"📋 Bill Preview", key=f"preview_{job['id']}_{tab_status}"):
-                                for key in list(st.session_state.keys()):
-                                    if key.startswith("show_details_") or key.startswith("show_update_") or key.startswith("show_preview_"):
-                                        del st.session_state[key]
-                                st.session_state[f"show_preview_{job['id']}"] = True
-                                st.rerun()
-                        
+                                      
                         # Download invoice button for completed jobs only
                         if tab_status == "Completed":
                             try:
@@ -149,7 +140,24 @@ def view_jobs_tab(conn, user):
                                     st.error("Job not found")
                             except Exception as e:
                                 st.error(f"Error generating invoice: {str(e)}")
-                        
+                        # Download Job Sheet button for new and in progress jobs only
+                        if tab_status in ["New", "In Progress"]:
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT id FROM jobs WHERE id = ?", (job['id'],))
+                                if cursor.fetchone():
+                                    pdf_bytes = generate_invoice_pdf_stream(job['id'], status=tab_status)
+                                    st.download_button(
+                                        "📥 Download JobSheet", 
+                                        data=pdf_bytes, 
+                                        file_name=f"jobsheet_{job['id']}.pdf", 
+                                        mime="application/pdf",
+                                        key=f"download_{job['id']}_{tab_status}"
+                                    )
+                                else:
+                                    st.error("Job not found")
+                            except Exception as e:
+                                st.error(f"Error generating invoice: {str(e)}")
                         # Status change buttons
                         if user['role'] in ['admin', 'manager', 'technician']:
                             if tab_status == "New":
@@ -162,64 +170,6 @@ def view_jobs_tab(conn, user):
                                     st.session_state[f"show_update_{job['id']}"] = "Completed"
                                     st.rerun()
 
-                    # Bill Preview Dialog
-                    # if st.session_state.get(f"show_preview_{job['id']}", False):
-                    #     # Add CSS for the modal overlay
-                    #     st.markdown("""
-                    #         <style>
-                    #         .modal-overlay {
-                    #             position: fixed;
-                    #             top: 0;
-                    #             left: 0;
-                    #             right: 0;
-                    #             bottom: 0;
-                    #             background-color: rgba(0,0,0,0.5);
-                    #             display: flex;
-                    #             justify-content: center;
-                    #             align-items: center;
-                    #             z-index: 1000;
-                    #         }
-                    #         .modal-content {
-                    #             background-color: white;
-                    #             padding: 20px;
-                    #             border-radius: 10px;
-                    #             width: 80%;
-                    #             max-width: 800px;
-                    #             max-height: 80vh;
-                    #             overflow-y: auto;
-                    #         }
-                    #         </style>
-                    #         """, unsafe_allow_html=True)
-                        
-                    #     # Modal container
-                    #     st.markdown("""
-                    #         <div class="modal-overlay">
-                    #             <div class="modal-content">
-                    #     """, unsafe_allow_html=True)
-                        
-                    #     # Display the bill preview content
-                    #     display_bill_preview(
-                    #         conn,
-                    #         job['id'],
-                    #         job['customer_name'],
-                    #         job['customer_phone'],
-                    #         job['device_type'],
-                    #         job['device_model'],
-                    #         job['problem_description'],
-                    #         job['deposit_cost'],
-                    #         job['actual_cost'],
-                    #         tab_status
-                    #     )
-                        
-                    #     # Close button
-                    #     if st.button("Close Preview", key=f"close_preview_{job['id']}"):
-                    #         st.session_state[f"show_preview_{job['id']}"] = False
-                    #         st.rerun()
-                        
-                    #     st.markdown("""
-                    #             </div>
-                    #         </div>
-                    #         """, unsafe_allow_html=True)
         else:
             st.info(f"No {tab_status.lower()} jobs found.")
 

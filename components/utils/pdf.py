@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.datamanager.databasemanger import DatabaseManager
 
 
-def generate_invoice_pdf_stream(job_id: int,  status:str,  base_url="http://localhost:8501/repair_status?" ) -> BytesIO:
+def generate_invoice_pdf_stream(job_id: int,  status:str,  base_url="https://jayanth119-refactored-jobsheet-main-vtllnj.streamlit.app//repair_status?" ) -> BytesIO:
     """
     Generate invoice PDF for a job with improved error handling
     """

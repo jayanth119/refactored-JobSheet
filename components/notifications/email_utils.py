@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.datamanager.databasemanger import DatabaseManager
 from components.utils.pdf import generate_invoice_pdf_stream 
 
-def send_job_status_email(conn: sqlite3.Connection, job_id: int, base_url="http://localhost:8501/repair_status?job_id="):
+def send_job_status_email(conn: sqlite3.Connection, job_id: int, base_url="https://jayanth119-refactored-jobsheet-main-vtllnj.streamlit.app//repair_status?job_id="):
     """
     Sends a repair job status email with a PDF invoice if completed.
 
