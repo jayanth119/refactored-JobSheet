@@ -98,40 +98,51 @@ def store_management():
         else:
             st.info("No stores found")
     
+
     with tab2:
-        st.markdown("### Add New Store")
-        
+        st.markdown("### ➕ Add New Store")
+
         with st.form("new_store_form"):
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 store_name = st.text_input("Store Name*", placeholder="e.g., RepairPro Downtown")
                 store_location = st.text_input("Location*", placeholder="e.g., Main Street Plaza")
-            
+
             with col2:
                 store_phone = st.text_input("Phone Number", placeholder="e.g., 555-0123")
                 store_email = st.text_input("Email", placeholder="e.g., downtown@repairpro.com")
-            
+
             submit_store = st.form_submit_button("🏪 Add Store", use_container_width=True)
-            
+
             if submit_store:
                 if store_name and store_location:
                     try:
                         cursor = conn.cursor()
+
+                        # Insert into `stores`
                         cursor.execute("""
                             INSERT INTO stores (name, location, phone, email)
                             VALUES (?, ?, ?, ?)
                         """, (store_name, store_location, store_phone, store_email))
                         
                         store_id = cursor.lastrowid
+
+                        # Also link this store to the current user (admin/manager)
+                        cursor.execute("""
+                            INSERT INTO user_stores (user_id, store_id, is_primary)
+                            VALUES (?, ?, ?)
+                        """, (user['id'], store_id, 0))  # You can set is_primary=1 if you want
+
                         conn.commit()
-                        
-                        st.success(f"✅ Store '{store_name}' added successfully! (ID: {store_id})")
-                        
+                        st.success(f"✅ Store '{store_name}' added and assigned successfully! (ID: {store_id})")
+
                     except Exception as e:
+                        conn.rollback()
                         st.error(f"❌ Error adding store: {str(e)}")
                 else:
                     st.error("⚠️ Please fill in required fields (Name and Location)")
+
     
     with tab3:
         st.markdown("### Store Performance Analytics")

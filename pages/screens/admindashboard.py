@@ -8,64 +8,48 @@ from pages.screens.createjob import create_job_tab
 
 def admin_dashboard(st):
     user = st.session_state.user
-    
+
     st.markdown(f'''
         <div class="main-header">
             <h1>🏠 Admin Dashboard</h1>
             <p>Welcome back, {user['full_name']} | Managing {"All Stores" if user['role'] == 'admin' else "Store"}</p>
         </div>
     ''', unsafe_allow_html=True)
-    
+
     db = DatabaseManager()
     conn = db.get_connection()
 
-    # Get store_ids admin has access to
+    # === Get Store IDs for current user ===
     if user['role'] == 'admin':
-        store_ids_query = "SELECT store_id FROM user_stores WHERE user_id = ?"
-        store_ids = [row['store_id'] for row in pd.read_sql(store_ids_query, conn, params=[user['id']]).to_dict('records')]
+        store_ids_df = pd.read_sql(
+            "SELECT store_id FROM user_stores WHERE user_id = ?", conn, params=[user['id']]
+        )
+        store_ids = store_ids_df['store_id'].tolist()
     else:
         store_ids = [user['store_id']]
 
-    # === Total Jobs ===
-    query = "SELECT COUNT(*) as count FROM jobs"
-    params = []
-    if store_ids:
-        query += f" WHERE store_id IN ({','.join(['?'] * len(store_ids))})"
-        params = store_ids
-    total_jobs = pd.read_sql(query, conn, params=params).iloc[0]['count']
+    # === Dashboard Metrics ===
+    def count_query(base_condition, extra_where=""):
+        query = f"SELECT COUNT(*) as count FROM jobs"
+        params = []
+        where_clauses = []
 
-    # === Ongoing Jobs ===
-    query = "SELECT COUNT(*) as count FROM jobs"
-    where_clauses = ["status = 'In Progress'"]
-    params = []
-    if store_ids:
-        where_clauses.insert(0, f"store_id IN ({','.join(['?'] * len(store_ids))})")
-        params = store_ids
-    if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-    ongoing_jobs = pd.read_sql(query, conn, params=params).iloc[0]['count']
+        if store_ids:
+            where_clauses.append(f"store_id IN ({','.join(['?']*len(store_ids))})")
+            params.extend(store_ids)
 
-    # === Completed Today ===
-    query = "SELECT COUNT(*) as count FROM jobs"
-    where_clauses = ["status = 'Completed'", "DATE(completed_at) = DATE('now')"]
-    params = []
-    if store_ids:
-        where_clauses.insert(0, f"store_id IN ({','.join(['?'] * len(store_ids))})")
-        params = store_ids
-    if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-    completed_today = pd.read_sql(query, conn, params=params).iloc[0]['count']
+        if extra_where:
+            where_clauses.append(extra_where)
 
-    # === Total Revenue ===
-    query = "SELECT COALESCE(SUM(actual_cost), 0) as revenue FROM jobs"
-    where_clauses = ["status = 'Completed'"]
-    params = []
-    if store_ids:
-        where_clauses.insert(0, f"store_id IN ({','.join(['?'] * len(store_ids))})")
-        params = store_ids
-    if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-    total_revenue = pd.read_sql(query, conn, params=params).iloc[0]['revenue']
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        return pd.read_sql(query, conn, params=params).iloc[0]['count']
+
+    total_jobs = count_query("all")
+    ongoing_jobs = count_query("status = 'In Progress'")
+    completed_today = count_query("status = 'Completed'", "DATE(completed_at) = DATE('now')")
+    completed_jobs = count_query("status = 'Completed'")
 
     # === Display Metrics ===
     col1, col2, col3, col4 = st.columns(4)
@@ -76,19 +60,21 @@ def admin_dashboard(st):
     with col3:
         st.markdown(f'''<div class="metric-card"><div class="metric-number">{completed_today}</div><div class="metric-label">Completed Today</div></div>''', unsafe_allow_html=True)
     with col4:
-        st.markdown(f'''<div class="metric-card"><div class="metric-number">${total_revenue:.0f}</div><div class="metric-label">Total Revenue</div></div>''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="metric-card"><div class="metric-number">{completed_jobs}</div><div class="metric-label">Completed Jobs</div></div>''', unsafe_allow_html=True)
 
     st.markdown("---")
 
     # === Search ===
-    st.markdown("### Search Jobs")
-    search_term = st.text_input("🔍 Search by customer name, device, or problem description", label_visibility="visible")
+    st.markdown("### 🔍 Search Jobs")
+    search_term = st.text_input("Search by customer name, phone number, or email", label_visibility="visible")
 
     if search_term:
-        search_query = f"""
+        search_query = """
             SELECT 
                 j.id, 
                 c.name AS customer_name, 
+                c.email AS customer_email,
+                c.phone AS customer_phone,
                 j.device_type, 
                 j.device_model,
                 j.problem_description, 
@@ -104,12 +90,11 @@ def admin_dashboard(st):
             LEFT JOIN users u ON ta.technician_id = u.id
             WHERE (
                 c.name LIKE ? OR 
-                j.device_type LIKE ? OR 
-                j.device_model LIKE ? OR 
-                j.problem_description LIKE ?
+                c.email LIKE ? OR 
+                c.phone LIKE ?
             )
         """
-        params = [f"%{search_term}%"] * 4
+        params = [f"%{search_term}%"] * 3
 
         if store_ids:
             placeholders = ",".join(["?"] * len(store_ids))
@@ -120,13 +105,14 @@ def admin_dashboard(st):
         search_results = pd.read_sql(search_query, conn, params=params)
 
         if not search_results.empty:
-            st.write(f"Found {len(search_results)} results:")
+            st.success(f"Found {len(search_results)} matching job(s):")
             for _, job in search_results.iterrows():
                 st.markdown(f'''
                     <div class="job-card">
                         <div class="job-title">#{job['id']} - {job['customer_name']} {f"| 🏪 {job['store_name']}" if user['role'] == 'admin' else ""}</div>
-                        <div class="job-details">{job['device_type']} - {job['device_model']}</div>
-                        <div class="job-details">{job['problem_description']}</div>
+                        <div class="job-details">📱 {job['device_type']} - {job['device_model']}</div>
+                        <div class="job-details">📝 {job['problem_description']}</div>
+                        <div class="job-details">📧 {job['customer_email']} | 📞 {job['customer_phone']}</div>
                         <div class="job-details">👨‍🔧 {job['technician'] or 'Unassigned'} | 🗓️ {job['created_at'][:10]}</div>
                         <span class="status-{job['status'].lower().replace(' ', '-')}">{job['status']}</span>
                     </div>
@@ -140,25 +126,38 @@ def admin_dashboard(st):
         create_job_tab(conn, user, db)
         st.markdown("### 🏪 Store Performance Overview")
 
-        if store_ids:
+        assigned_stores = pd.read_sql("""
+            SELECT s.id, s.name, s.location
+            FROM user_stores us
+            JOIN stores s ON us.store_id = s.id
+            WHERE us.user_id = ?
+        """, conn, params=[user["id"]])
+
+        if not assigned_stores.empty:
+            store_ids = assigned_stores["id"].tolist()
             placeholders = ",".join(["?"] * len(store_ids))
-            query = f"""
-                SELECT s.name, s.location,
-                       COUNT(j.id) as total_jobs,
-                       SUM(CASE WHEN j.status = 'Completed' THEN 1 ELSE 0 END) as completed_jobs,
-                       COALESCE(SUM(CASE WHEN j.status = 'Completed' THEN j.actual_cost ELSE 0 END), 0) as revenue
+
+            performance_query = f"""
+                SELECT 
+                    s.name, 
+                    s.location,
+                    COUNT(j.id) AS total_jobs,
+                    SUM(CASE WHEN j.status = 'Completed' THEN 1 ELSE 0 END) AS completed_jobs,
+                    COALESCE(SUM(CASE WHEN j.status = 'Completed' THEN j.actual_cost ELSE 0 END), 0) AS revenue
                 FROM stores s
                 LEFT JOIN jobs j ON s.id = j.store_id
                 WHERE s.id IN ({placeholders})
                 GROUP BY s.id, s.name, s.location
                 ORDER BY revenue DESC
             """
-            store_performance = pd.read_sql(query, conn, params=store_ids)
+
+            store_performance = pd.read_sql(performance_query, conn, params=store_ids)
+
             if not store_performance.empty:
                 st.dataframe(store_performance, use_container_width=True)
             else:
-                st.info("No store performance data available.")
+                st.info("No performance data found for your stores.")
         else:
-            st.warning("No store access assigned to this admin.")
+            st.warning("🚫 No stores are assigned to you.")
 
     conn.close()

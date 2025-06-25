@@ -3,17 +3,40 @@ import os
 import json 
 import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from components.datamanager.databasemanger import DatabaseManager
 import streamlit as st
-import pandas as pd
 import hashlib
-import time
-import sys
-import os 
+import time 
 import streamlit as st
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from components.datamanager.databasemanger import DatabaseManager
 from components.utils.auth import  authenticate_user, create_user
+from components.jobstatusinfo import display_job_info
+
+def fetch_job_details(job_id):
+    try:
+        db = DatabaseManager()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT j.id, j.device_model, j.problem_description, j.actual_cost, j.status, 
+                   c.name AS customer_name, c.phone AS customer_phone,
+                   s.name AS store_name, s.phone AS store_phone
+            FROM jobs j
+            LEFT JOIN customers c ON j.customer_id = c.id
+            LEFT JOIN stores s ON j.store_id = s.id
+            WHERE j.id = ?
+        ''', (job_id,))
+        result = cursor.fetchone()
+
+        return result
+
+    except Exception as e:
+        st.error("❌ Failed to retrieve job details.")
+        print("Database error:", e)
+        return None
+
+
 
 def login_signup_page():
 
@@ -53,7 +76,7 @@ def login_signup_page():
     st.markdown(hide_sidebar_style, unsafe_allow_html=True)
     
     # Only show login tab initially
-    tab1 = st.tabs(["🔐 Sign In"])[0]
+    tab1 , tab2 = st.tabs(["🔐 Sign In", "🔧Repair Status"])
     
     with tab1:
         st.markdown("### Welcome Back")
@@ -92,6 +115,20 @@ def login_signup_page():
                         st.error("❌ Invalid username or password")
                 else:
                     st.error("⚠️ Please enter both username and password")
+    with tab2 :
+        st.markdown("### 📝 Enter Job ID to Track Repair")
+        manual_job_id = st.text_input("Job ID", placeholder="Enter your Job ID")
+
+        if st.button("🔍 Check Status"):
+            if manual_job_id.isdigit():
+                data = fetch_job_details(int(manual_job_id))
+                if data:
+                    display_job_info(data)
+                else:
+                    st.error("❌ No repair job found for the entered ID.")
+            else:
+                st.error("⚠️ Please enter a valid numeric Job ID.")
+        
     
     # Only show signup option if admin is logged in
     if st.session_state.get('authenticated') and st.session_state.user.get('role') == 'admin':

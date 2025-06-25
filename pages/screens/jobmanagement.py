@@ -26,25 +26,24 @@ def jobs_management():
         db = DatabaseManager()
         conn = db.get_connection()
 
-        with tab2:
-            st.error("🚫 Access Denied: Technicians don't have access to job management.")
-            st.info("Please contact your manager or admin for access to job management.")
-
         with tab1:
                 view_jobs_tab(conn, user)
+
+        with tab2:
+                create_job_tab(conn, user, db)
         
 
         return
     else :
-        tab1, tab2 = st.tabs(["📝 Add New Job", "📋 View Jobs"])
+        tab1, tab2 = st.tabs([ "📋 View Jobs" , "📝 Add New Job",])
     
         db = DatabaseManager()
         conn = db.get_connection()
 
-        with tab2:
+        with tab1:
                 view_jobs_tab(conn, user)
 
-        with tab1:
+        with tab2:
                 create_job_tab(conn, user, db)
         
 
