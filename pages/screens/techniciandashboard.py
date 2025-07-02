@@ -98,7 +98,7 @@ def technician_dashboard():
     st.markdown("---")
     
     # === Tabs ===
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 My Jobs", "📊 Performance", "🔧 Quick Actions", "📈 Analytics", "📝 Job History"])
+    tab1, tab2, tab4, tab5 = st.tabs(["🎯 My Jobs", "📊 Performance", "📈 Analytics", "📝 Job History"])
     
     with tab1:
         st.markdown("### My Current Jobs")
@@ -152,33 +152,33 @@ def technician_dashboard():
                         st.markdown("**Actions**")
                         
                         # Status update buttons
-                        if job['status'] == 'New':
-                            if st.button(f"🚀 Start Job #{job['id']}", key=f"start_{job['id']}"):
-                                update_job_status(conn, job['id'], 'In Progress', user['id'])
-                                st.rerun()
+                        # if job['status'] == 'New':
+                        #     if st.button(f"🚀 Start Job #{job['id']}", key=f"start_{job['id']}"):
+                        #         update_job_status(conn, job['id'], 'In Progress', user['id'])
+                        #         st.rerun()
                         
-                        elif job['status'] == 'In Progress':
-                            if st.button(f"✅ Complete Job #{job['id']}", key=f"complete_{job['id']}"):
-                                update_job_status(conn, job['id'], 'Completed', user['id'])
-                                st.rerun()
+                        # elif job['status'] == 'In Progress':
+                        #     if st.button(f"✅ Complete Job #{job['id']}", key=f"complete_{job['id']}"):
+                        #         update_job_status(conn, job['id'], 'Completed', user['id'])
+                        #         st.rerun()
                             
-                            if st.button(f"⏸️ Set Pending #{job['id']}", key=f"pending_{job['id']}"):
-                                update_job_status(conn, job['id'], 'Pending', user['id'])
-                                st.rerun()
+                        #     if st.button(f"⏸️ Set Pending #{job['id']}", key=f"pending_{job['id']}"):
+                        #         update_job_status(conn, job['id'], 'Pending', user['id'])
+                        #         st.rerun()
                         
-                        elif job['status'] == 'Pending':
-                            if st.button(f"🔄 Resume Job #{job['id']}", key=f"resume_{job['id']}"):
-                                update_job_status(conn, job['id'], 'In Progress', user['id'])
-                                st.rerun()
+                        # elif job['status'] == 'Pending':
+                        #     if st.button(f"🔄 Resume Job #{job['id']}", key=f"resume_{job['id']}"):
+                        #         update_job_status(conn, job['id'], 'In Progress', user['id'])
+                        #         st.rerun()
                         
                         # Add job notes
-                        with st.form(f"notes_form_{job['id']}"):
-                            new_note = st.text_area("Add Note", key=f"note_{job['id']}")
-                            if st.form_submit_button("Add Note"):
-                                if new_note:
-                                    add_job_note(conn, job['id'], new_note)
-                                    st.success("Note added!")
-                                    st.rerun()
+                        # with st.form(f"notes_form_{job['id']}"):
+                        #     new_note = st.text_area("Add Note", key=f"note_{job['id']}")
+                        #     if st.form_submit_button("Add Note"):
+                        #         if new_note:
+                        #             add_job_note(conn, job['id'], new_note)
+                        #             st.success("Note added!")
+                        #             st.rerun()
         else:
             st.info("No jobs currently assigned to you.")
     
@@ -247,64 +247,65 @@ def technician_dashboard():
         else:
             st.info("No performance data available yet.")
     
-    with tab3:
-        st.markdown("### Quick Actions")
+    # with tab3:
+    #     pass 
+        # st.markdown("### Quick Actions")
         
-        col1, col2 = st.columns(2)
+        # col1, col2 = st.columns(2)
         
-        with col1:
-            st.markdown("#### Job Status Updates")
+        # with col1:
+        #     st.markdown("#### Job Status Updates")
             
-            # Quick status updates for multiple jobs
-            pending_jobs = pd.read_sql("""
-                SELECT j.id, j.device_type, j.device_model, c.name as customer_name
-                FROM jobs j
-                JOIN customers c ON j.customer_id = c.id
-                JOIN assignment_jobs aj ON j.id = aj.job_id
-                JOIN technician_assignments ta ON aj.assignment_id = ta.id
-                WHERE ta.technician_id = ? AND j.status IN ('New', 'In Progress', 'Pending')
-                ORDER BY j.created_at
-            """, conn, params=[user['id']])
+        #     # Quick status updates for multiple jobs
+        #     pending_jobs = pd.read_sql("""
+        #         SELECT j.id, j.device_type, j.device_model, c.name as customer_name
+        #         FROM jobs j
+        #         JOIN customers c ON j.customer_id = c.id
+        #         JOIN assignment_jobs aj ON j.id = aj.job_id
+        #         JOIN technician_assignments ta ON aj.assignment_id = ta.id
+        #         WHERE ta.technician_id = ? AND j.status IN ('New', 'In Progress', 'Pending')
+        #         ORDER BY j.created_at
+        #     """, conn, params=[user['id']])
             
-            if not pending_jobs.empty:
-                for _, job in pending_jobs.iterrows():
-                    col_a, col_b, col_c = st.columns([2, 1, 1])
-                    with col_a:
-                        st.write(f"#{job['id']} - {job['customer_name']}")
-                        st.caption(f"{job['device_type']} {job['device_model']}")
+        #     if not pending_jobs.empty:
+        #         for _, job in pending_jobs.iterrows():
+        #             col_a, col_b, col_c = st.columns([2, 1, 1])
+        #             with col_a:
+        #                 st.write(f"#{job['id']} - {job['customer_name']}")
+        #                 st.caption(f"{job['device_type']} {job['device_model']}")
                     
-                    with col_b:
-                        if st.button("▶️ Start", key=f"quick_start_{job['id']}"):
-                            update_job_status(conn, job['id'], 'In Progress', user['id'])
-                            st.rerun()
+        #             with col_b:
+        #                 if st.button("▶️ Start", key=f"quick_start_{job['id']}"):
+        #                     update_job_status(conn, job['id'], 'In Progress', user['id'])
+        #                     st.rerun()
                     
-                    with col_c:
-                        if st.button("✅ Done", key=f"quick_complete_{job['id']}"):
-                            update_job_status(conn, job['id'], 'Completed', user['id'])
-                            st.rerun()
-            else:
-                st.info("No pending jobs")
+        #             with col_c:
+        #                 if st.button("✅ Done", key=f"quick_complete_{job['id']}"):
+        #                     update_job_status(conn, job['id'], 'Completed', user['id'])
+        #                     st.rerun()
+        #     else:
+        #         st.info("No pending jobs")
         
-        with col2:
-            st.markdown("#### Today's Summary")
+        # with col2:
+        #     st.markdown("#### Today's Summary")
             
-            today_summary = pd.read_sql("""
-                SELECT 
-                    j.status,
-                    COUNT(*) as count
-                FROM jobs j
-                JOIN assignment_jobs aj ON j.id = aj.job_id
-                JOIN technician_assignments ta ON aj.assignment_id = ta.id
-                WHERE ta.technician_id = ? 
-                  AND DATE(j.created_at) = DATE('now')
-                GROUP BY j.status
-            """, conn, params=[user['id']])
+        #     today_summary = pd.read_sql("""
+        #         SELECT 
+        #             j.status,
+        #             COUNT(*) as count
+        #         FROM jobs j
+        #         JOIN assignment_jobs aj ON j.id = aj.job_id
+        #         JOIN technician_assignments ta ON aj.assignment_id = ta.id
+        #         WHERE ta.technician_id = ? 
+        #           AND DATE(j.created_at) = DATE('now')
+        #         GROUP BY j.status
+        #     """, conn, params=[user['id']])
             
-            if not today_summary.empty:
-                for _, row in today_summary.iterrows():
-                    st.metric(f"{row['status']} Jobs", int(row['count']))
-            else:
-                st.info("No jobs today")
+        #     if not today_summary.empty:
+        #         for _, row in today_summary.iterrows():
+        #             st.metric(f"{row['status']} Jobs", int(row['count']))
+        #     else:
+        #         st.info("No jobs today")
     
     with tab4:
         st.markdown("### My Analytics")

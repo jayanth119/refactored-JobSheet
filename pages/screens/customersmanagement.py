@@ -25,38 +25,59 @@ def customers_management():
     with tabs[0]:
         st.markdown("### Customer Directory")
 
-        search_term = st.text_input("🔍 Search by Customer Name", "")
+        search_term = st.text_input(
+            "🔍 Search (name, email, phone, address, ID)",
+            placeholder="Type part of a name, phone, email, address or #ID…"
+        ).strip()
 
-        if user['role'] == 'admin':
-            query = f"""
-                SELECT c.id, c.name, c.phone, c.email, c.address, 
-                       c.created_at, s.name as store_name,
-                       COUNT(j.id) as total_jobs
-                FROM customers c
-                LEFT JOIN stores s ON c.store_id = s.id
-                LEFT JOIN jobs j ON c.id = j.customer_id
-                {"WHERE c.name LIKE ?" if search_term else ""}
-                GROUP BY c.id, c.name, c.phone, c.email, c.address, c.created_at, s.name
-                ORDER BY c.created_at DESC
-            """
-            params = [f"%{search_term}%"] if search_term else []
+        # ── Build query ──
+        base_query = """
+            SELECT
+                c.id, c.name, c.phone, c.email, c.address,
+                c.created_at,
+                {store_col}
+                COUNT(j.id) AS total_jobs
+            FROM customers c
+            LEFT JOIN stores s ON c.store_id = s.id
+            LEFT JOIN jobs j ON c.id = j.customer_id
+            WHERE 1 = 1
+        """
+        params = []
+
+        # Role-based filtering
+        if user["role"] != "admin":
+            base_query += " AND c.store_id = ?"
+            params.append(user["store_id"])
+            store_col = ""
         else:
-            query = f"""
-                SELECT c.id, c.name, c.phone, c.email, c.address, 
-                       c.created_at, COUNT(j.id) as total_jobs
-                FROM customers c
-                LEFT JOIN jobs j ON c.id = j.customer_id
-                WHERE c.store_id = ?
-                {"AND c.name LIKE ?" if search_term else ""}
-                GROUP BY c.id, c.name, c.phone, c.email, c.address, c.created_at
-                ORDER BY c.created_at DESC
-            """
-            params = [user['store_id']]
-            if search_term:
-                params.append(f"%{search_term}%")
+            store_col = "s.name AS store_name,"
 
+        # Search filter
+        if search_term:
+            base_query += """
+                AND (
+                    c.name LIKE ?
+                    OR c.email LIKE ?
+                    OR c.phone LIKE ?
+                    OR c.address LIKE ?
+                    OR CAST(c.id AS TEXT) LIKE ?
+                )
+            """
+            like = f"%{search_term}%"
+            params.extend([like] * 5)
+
+        # Finalize query
+        base_query += f"""
+            GROUP BY c.id, c.name, c.phone, c.email, c.address, c.created_at {',' if store_col else ''} {store_col and 's.name'}
+            ORDER BY c.created_at DESC
+        """
+
+        query = base_query.format(store_col=store_col)
+
+        # ── Fetch data ──
         customers_df = pd.read_sql(query, conn, params=params)
 
+        # ── Display ──
         if not customers_df.empty:
             st.write(f"**Total Customers:** {len(customers_df)}")
 
@@ -102,8 +123,7 @@ def customers_management():
 
                             if st.session_state.get(f"show_details_{job_id}", False):
                                 show_job_details_modal(conn, job_id, editable=False)
-
         else:
-            st.info("No customers found for your store.")
+            st.info("No customers found with that search.")
 
     conn.close()

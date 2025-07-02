@@ -5,8 +5,7 @@ import json
 import time
 import hashlib
 from components.css.css import Style
-from components.datamanager.databasemanger import DatabaseManager
-from components.utils.auth import authenticate_user
+from pages.screens.old_mobiles import old_mobiles_page
 from pages.screens.loginpage import login_signup_page
 from pages.screens.admindashboard import admin_dashboard
 from pages.screens.staffdashboard import staff_dashboard
@@ -77,6 +76,8 @@ def main():
             user_management()
         elif current_page == "settings":
             settings_page()
+        elif current_page == "old_mobiles":
+            old_mobiles_page()
 
 if __name__ == "__main__":
     main()

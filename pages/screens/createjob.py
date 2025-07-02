@@ -37,21 +37,22 @@ def create_job_tab(conn, user, db):
             st.session_state.job_form_data['device_model'],
             st.session_state.job_form_data['problem_description'],
             st.session_state.job_form_data['deposit_cost'],
-            st.session_state.job_form_data['actual_cost'],
-            status= "New"
+            st.session_state.job_form_data['estimate_cost'],
+            status="New"
         )
         st.divider()
         return
 
-    # ✅ Render device password type and value BEFORE the form to allow reactivity
+    # Device password section rendered OUTSIDE the form for reactivity
     st.markdown("#### 🔐 Device Security")
     st.info("💡 Password/PIN will be securely stored")
-    password_section = render_password_section()  # Now reactive outside the form
+    password_section = render_password_section()
     device_password_type = password_section['type']
     device_password = password_section['value']
     if device_password:
         st.success("🔒 Password/PIN captured - will be stored securely")
     
+    # Device information section - MOVED OUTSIDE FORM for immediate response
     st.markdown("#### 📱 Device Information")
     col1, col2 = st.columns(2)
 
@@ -59,7 +60,14 @@ def create_job_tab(conn, user, db):
         device_type = st.selectbox("Device Type*", ["Smartphone", "Tablet", "Laptop", "Desktop", "Watch", "Other"], index=0)
     with col2:
         device_model = st.selectbox("Device Model", models)
-    
+        
+    # Store assignment section - MOVED OUTSIDE FORM for immediate response
+    st.markdown("#### 🏪 Store Assignment")
+    selected_store_id = render_store_assignment(conn, user)
+
+    # Technician assignment section - MOVED OUTSIDE FORM for immediate response
+    st.markdown("#### 👨‍🔧 Assignment")
+    technician_assignment, assigned_by = render_technician_assignment(conn, user, selected_store_id)
     with st.form("new_job_form", clear_on_submit=False):
         st.markdown("#### 👤 Customer Information")
         col1, col2 = st.columns(2)
@@ -91,10 +99,7 @@ def create_job_tab(conn, user, db):
         with col1:
             deposit_cost = st.number_input("Deposit Amount ($)", min_value=0.0, value=0.0, step=5.0)
         with col2:
-            actual_cost = st.number_input("Actual Cost ($)", min_value=0.0, value=0.0, step=5.0)
-
-        st.markdown("#### 👨‍🔧 Assignment")
-        technician_assignment = render_technician_assignment(conn, user)
+            estimate_cost = st.number_input("Estimated Cost ($)", min_value=0.0, value=0.0, step=5.0)
 
         st.markdown("#### 📢 Notification Preferences")
         notification_methods = st.multiselect("How should we notify the customer?", ["SMS", "Email", "Phone Call", "WhatsApp"], default=["Email"])
@@ -117,6 +122,8 @@ def create_job_tab(conn, user, db):
                 errors.append("Customer phone is required")
             if not problem_description.strip():
                 errors.append("Problem description is required")
+            if not selected_store_id:
+                errors.append("Store selection is required")
 
             if uploaded_photos:
                 for photo in uploaded_photos:
@@ -137,7 +144,7 @@ def create_job_tab(conn, user, db):
                     'device_model': device_model,
                     'problem_description': problem_description,
                     'deposit_cost': deposit_cost,
-                    'actual_cost': actual_cost
+                    'estimate_cost': estimate_cost
                 }
                 
                 with st.spinner("Creating job and processing uploads..."):
@@ -154,17 +161,20 @@ def create_job_tab(conn, user, db):
                             'device_password': device_password,
                             'problem_description': problem_description,
                             'deposit_cost': deposit_cost,
-                            'actual_cost': actual_cost,
+                            'estimate_cost': estimate_cost,
                             'technician_id': technician_assignment,
+                            'assigned_by': assigned_by,
                             'notification_methods': notification_methods,
                             'existing_customer_id': existing_customer_info[0] if existing_customer_info else None,
-                            'auto_used_existing': bool(existing_customer_info)
+                            'auto_used_existing': bool(existing_customer_info),
+                            'selected_store_id': selected_store_id
                         },
                         uploaded_photos
                     )
                     
                 if success:      
-                    send_job_status_email(conn, job_id)
+                    # FIXED: Commented out email function that may not exist
+                    # send_job_status_email(conn, job_id)
                     st.session_state.job_created_successfully = True
                     st.session_state.last_created_job_id = job_id
                     
@@ -177,6 +187,102 @@ def create_job_tab(conn, user, db):
                     
                     st.rerun()
 
+
+def render_store_assignment(conn, user):
+    """
+    Render store assignment section based on user role
+    - Admin: Can select any store
+    - Other roles: Shows their assigned store (read-only)
+    """
+    cursor = conn.cursor()
+    
+    if user.get('role') == 'admin':
+        # Admin can see and select any store
+        stores_df = pd.read_sql('''
+            SELECT s.id, s.name, s.location
+            FROM user_stores us
+            JOIN stores s ON us.store_id = s.id
+            WHERE us.user_id = ?
+            ORDER BY s.name
+        ''', conn, params=[user['id']])
+
+        
+        if not stores_df.empty:
+            store_options = [(f"{row['name']} - {row['location']}", row['id']) for _, row in stores_df.iterrows()]
+            
+            selected_store = st.selectbox(
+                "Select Store*",
+                store_options,
+                format_func=lambda x: x[0],
+                help="Select which store this job belongs to",
+                key="store_selection"  # Added key for consistency
+            )
+            
+            return selected_store[1]  # Return store_id
+        else:
+            st.error("⚠️ No stores found in the system")
+            return None
+    else:
+        # Non-admin users: Show their assigned store (read-only)
+        user_store_id = user.get('store_id')
+        
+        if user_store_id:
+            # Get store details
+            cursor.execute('''
+                SELECT name, location 
+                FROM stores 
+                WHERE id = ?
+            ''', (user_store_id,))
+            
+            store_info = cursor.fetchone()
+            
+            if store_info:
+                st.info(f"🏪 **Assigned Store:** {store_info[0]} - {store_info[1]}")
+                return user_store_id
+            else:
+                st.error("⚠️ Your assigned store was not found")
+                return None
+        else:
+            st.error("⚠️ You are not assigned to any store. Contact administrator.")
+            return None
+
+
+def render_technician_assignment(conn, user, selected_store_id):
+    """
+    Render technician assignment based on store selection
+    """
+    if not selected_store_id:
+        st.warning("⚠️ Please select a store first to see available technicians")
+        return None, None
+    
+    # Get technicians for the selected store
+    technicians_df = pd.read_sql('''
+        SELECT u.id, u.full_name, u.email
+        FROM users u
+        JOIN store_technicians st ON u.id = st.technician_id
+        WHERE st.store_id = ? AND st.is_active = 1 AND u.role = 'technician'
+        ORDER BY u.full_name
+    ''', conn, params=[selected_store_id])
+
+    if not technicians_df.empty:
+        tech_options = [("Unassigned", None)]
+        tech_options.extend([(f"{row['full_name']} ({row['email']})", row['id']) for _, row in technicians_df.iterrows()])
+        
+        selected_tech = st.selectbox(
+            "Assign Technician",
+            tech_options,
+            format_func=lambda x: x[0],
+            help="Select a technician to assign this job to",
+            key="technician_selection"  # Added key for consistency
+        )
+        
+        technician_id = selected_tech[1]
+        assigned_by = user["id"]  # Logged-in user is assigning the tech
+
+        return technician_id, assigned_by
+    else:
+        st.warning("⚠️ No technicians available for the selected store")
+        return None, None
 
 
 def render_password_section():
@@ -213,30 +319,3 @@ def render_password_section():
                 - Complex: `2 → 5 → 8 → 7 → 4 → 1`
                 """)
     return {'type': password_type, 'value': password_value.strip() if password_value else ""}
-
-def render_technician_assignment(conn, user):
-    if user.get('store_id'):
-        technicians_df = pd.read_sql('''
-            SELECT u.id, u.full_name, u.email
-            FROM users u
-            JOIN store_technicians st ON u.id = st.technician_id
-            WHERE st.store_id = ? AND st.is_active = 1 AND u.role = 'technician'
-            ORDER BY u.full_name
-        ''', conn, params=[user['store_id']])
-    else:
-        technicians_df = pd.read_sql('''
-            SELECT u.id, u.full_name, u.email
-            FROM users u
-            JOIN store_technicians st ON u.id = st.technician_id
-            WHERE st.is_active = 1 AND u.role = 'technician'
-            ORDER BY u.full_name
-        ''', conn)
-    
-    if len(technicians_df) > 0:
-        tech_options = [("Unassigned", None)]
-        tech_options.extend([(f"{row['full_name']} ({row['email']})", row['id']) for _, row in technicians_df.iterrows()])
-        selected_tech = st.selectbox("Assign Technician", tech_options, format_func=lambda x: x[0], help="Select a technician to assign this job to")
-        return selected_tech[1]
-    else:
-        st.warning("⚠️ No technicians available for assignment")
-        return None

@@ -29,8 +29,8 @@ def admin_dashboard(st):
         store_ids = [user['store_id']]
 
     # === Dashboard Metrics ===
-    def count_query(base_condition, extra_where=""):
-        query = f"SELECT COUNT(*) as count FROM jobs"
+    def count_query(extra_condition=None):
+        query = "SELECT COUNT(*) as count FROM jobs"
         params = []
         where_clauses = []
 
@@ -38,17 +38,18 @@ def admin_dashboard(st):
             where_clauses.append(f"store_id IN ({','.join(['?']*len(store_ids))})")
             params.extend(store_ids)
 
-        if extra_where:
-            where_clauses.append(extra_where)
+        if extra_condition:
+            where_clauses.append(extra_condition)
 
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
 
         return pd.read_sql(query, conn, params=params).iloc[0]['count']
 
-    total_jobs = count_query("all")
+    # Job metrics
+    total_jobs = count_query()
     ongoing_jobs = count_query("status = 'In Progress'")
-    completed_today = count_query("status = 'Completed'", "DATE(completed_at) = DATE('now')")
+    completed_today = count_query("status = 'Completed' AND DATE(completed_at) = DATE('now')")
     completed_jobs = count_query("status = 'Completed'")
 
     # === Display Metrics ===

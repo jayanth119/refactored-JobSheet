@@ -5,12 +5,9 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from components.css.css import Style
 from components.datamanager.databasemanger import DatabaseManager
-from components.utils.auth import hash_password , verify_password,authenticate_user , create_user
-from pages.screens.loginpage import login_signup_page
-from pages.screens.admindashboard import admin_dashboard
 
 def store_management():
     """Only accessible by admin users"""
@@ -27,7 +24,15 @@ def store_management():
         </div>
     ''', unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏪 View Stores", "➕ Add Store", "📊 Store Analytics", "📱 Device Analytics", "🔧 Repair Analytics"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "🏪 View Stores", 
+        "➕ Add Store", 
+        "📊 Store Analytics", 
+        "📱 Device Analytics", 
+        "🔧 Repair Analytics",
+        "👨‍🔧 Technician Analytics",
+        "📅 Daily Analysis"
+    ])
     
     db = DatabaseManager()
     conn = db.get_connection()
@@ -98,7 +103,6 @@ def store_management():
         else:
             st.info("No stores found")
     
-
     with tab2:
         st.markdown("### ➕ Add New Store")
 
@@ -143,7 +147,6 @@ def store_management():
                 else:
                     st.error("⚠️ Please fill in required fields (Name and Location)")
 
-    
     with tab3:
         st.markdown("### Store Performance Analytics")
         
@@ -309,7 +312,7 @@ def store_management():
             }).reset_index()
             
             device_analysis['completion_rate'] = (device_analysis['completed_count'] / device_analysis['job_count'] * 100).round(2)
-            device_analysis['avg_repair_cost'] = device_analysis['avg_repair_cost'].round(2)
+            device_analysis['avg_repair_cost'] = device_analysis['avg_repair_cost']
             device_analysis['total_revenue'] = device_analysis['total_revenue'].round(2)
             
             device_analysis = device_analysis.sort_values('total_revenue', ascending=False)
@@ -479,5 +482,523 @@ def store_management():
             
         else:
             st.info("No repair data available for analysis")
+
+    with tab6:
+        st.markdown("### 👨‍🔧 Technician Analytics")
+        
+        # Technician performance overview
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Date range selector for technician analysis
+            st.markdown("#### Filter by Date Range")
+            date_range = st.date_input(
+                "Select Date Range",
+                value=[datetime.now() - timedelta(days=30), datetime.now()],
+                max_value=datetime.now(),
+                key="tech_date_range"
+            )
+            
+            if len(date_range) == 2:
+                start_date, end_date = date_range
+            else:
+                start_date = datetime.now() - timedelta(days=30)
+                end_date = datetime.now()
+        
+        with col2:
+            # Store filter for technician analysis
+            st.markdown("#### Filter by Store")
+            all_stores_tech = pd.read_sql("SELECT id, name FROM stores ORDER BY name", conn)
+            store_options = ["All Stores"] + all_stores_tech['name'].tolist()
+            selected_store_tech = st.selectbox("Select Store", store_options, key="tech_store_filter")
+        
+        # Build the technician query with filters
+        tech_base_query = """
+            SELECT u.id as technician_id, u.full_name as technician_name, u.email,
+                   s.name as store_name,
+                   COUNT(DISTINCT j.id) as total_jobs,
+                   COUNT(DISTINCT CASE WHEN j.status = 'Completed' THEN j.id END) as completed_jobs,
+                   COUNT(DISTINCT CASE WHEN j.status = 'In Progress' THEN j.id END) as in_progress_jobs,
+                   COUNT(DISTINCT CASE WHEN j.status = 'Failed' THEN j.id END) as failed_jobs,
+                   COALESCE(SUM(CASE WHEN j.status = 'Completed' THEN j.actual_cost ELSE 0 END), 0) as total_revenue,
+                   COALESCE(AVG(CASE WHEN j.status = 'Completed' THEN j.actual_cost END), 0) as avg_job_value,
+                   AVG(CASE 
+                       WHEN j.completed_at IS NOT NULL AND j.started_at IS NOT NULL 
+                       THEN (julianday(j.completed_at) - julianday(j.started_at))
+                       ELSE NULL 
+                   END) as avg_completion_time,
+                   u.last_login
+            FROM users u
+            LEFT JOIN stores s ON u.store_id = s.id
+            LEFT JOIN jobs j ON u.id = j.assigned_by
+            WHERE u.role IN ('staff', 'technician')
+        """
+        
+        # Add date filter
+        tech_base_query += f" AND (j.created_at IS NULL OR j.created_at BETWEEN '{start_date}' AND '{end_date}')"
+        
+        # Add store filter
+        if selected_store_tech != "All Stores":
+            store_id_tech = all_stores_tech[all_stores_tech['name'] == selected_store_tech]['id'].iloc[0]
+            tech_base_query += f" AND u.store_id = {store_id_tech}"
+        
+        tech_base_query += """
+            GROUP BY u.id, u.full_name, u.email, s.name, u.last_login
+            ORDER BY completed_jobs DESC
+        """
+        
+        technician_data = pd.read_sql(tech_base_query, conn)
+        
+        if not technician_data.empty:
+            # Main technician performance chart
+            st.markdown("#### 👨‍🔧 Technician vs Number of Jobs Repaired")
+            
+            # Create a comprehensive technician performance chart
+            fig = make_subplots(
+                rows=2, cols=2,
+                subplot_titles=('Jobs Completed by Technician', 'Total Revenue by Technician', 
+                               'Job Success Rate (%)', 'Average Job Value'),
+                specs=[[{"secondary_y": False}, {"secondary_y": False}],
+                       [{"secondary_y": False}, {"secondary_y": False}]]
+            )
+            
+            # Sort by completed jobs for better visualization
+            tech_sorted = technician_data.sort_values('completed_jobs', ascending=True)
+            
+            # Jobs completed chart
+            fig.add_trace(
+                go.Bar(
+                    x=tech_sorted['completed_jobs'],
+                    y=tech_sorted['technician_name'],
+                    orientation='h',
+                    name='Completed Jobs',
+                    marker_color='lightblue',
+                    text=tech_sorted['completed_jobs'],
+                    textposition='outside'
+                ),
+                row=1, col=1
+            )
+            
+            # Revenue chart
+            fig.add_trace(
+                go.Bar(
+                    x=tech_sorted['total_revenue'],
+                    y=tech_sorted['technician_name'],
+                    orientation='h',
+                    name='Total Revenue',
+                    marker_color='lightgreen',
+                    text=[f'${x:.0f}' for x in tech_sorted['total_revenue']],
+                    textposition='outside'
+                ),
+                row=1, col=2
+            )
+            
+            # Success rate calculation and chart
+            tech_sorted['success_rate'] = (tech_sorted['completed_jobs'] / tech_sorted['total_jobs'] * 100).fillna(0)
+            fig.add_trace(
+                go.Bar(
+                    x=tech_sorted['success_rate'],
+                    y=tech_sorted['technician_name'],
+                    orientation='h',
+                    name='Success Rate',
+                    marker_color='orange',
+                    text=[f'{x:.1f}%' for x in tech_sorted['success_rate']],
+                    textposition='outside'
+                ),
+                row=2, col=1
+            )
+            
+            # Average job value chart
+            fig.add_trace(
+                go.Bar(
+                    x=tech_sorted['avg_job_value'],
+                    y=tech_sorted['technician_name'],
+                    orientation='h',
+                    name='Avg Job Value',
+                    marker_color='purple',
+                    text=[f'${x:.0f}' for x in tech_sorted['avg_job_value']],
+                    textposition='outside'
+                ),
+                row=2, col=2
+            )
+            
+            fig.update_layout(
+                height=600,
+                showlegend=False,
+                title_text="Comprehensive Technician Performance Dashboard"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Detailed technician comparison table
+            st.markdown("#### Detailed Technician Performance")
+            
+            # Prepare data for display
+            display_data = technician_data.copy()
+            display_data['success_rate'] = (display_data['completed_jobs'] / display_data['total_jobs'] * 100).fillna(0).round(1)
+            display_data['avg_completion_time'] = display_data['avg_completion_time'].fillna(0).round(1)
+            display_data['last_login_formatted'] = display_data['last_login'].apply(
+                lambda x: x[:10] if x else 'Never'
+            )
+            
+            # Display the dataframe with custom formatting
+            st.dataframe(
+                display_data[['technician_name', 'store_name', 'total_jobs', 'completed_jobs', 
+                             'in_progress_jobs', 'failed_jobs', 'success_rate', 'total_revenue', 
+                             'avg_job_value', 'avg_completion_time', 'last_login_formatted']],
+                column_config={
+                    "technician_name": "Technician Name",
+                    "store_name": "Store",
+                    "total_jobs": "Total Jobs",
+                    "completed_jobs": "Completed",
+                    "in_progress_jobs": "In Progress", 
+                    "failed_jobs": "Failed",
+                    "success_rate": st.column_config.NumberColumn("Success Rate (%)", format="%.1f%%"),
+                    "total_revenue": st.column_config.NumberColumn("Total Revenue", format="$%.2f"),
+                    "avg_job_value": st.column_config.NumberColumn("Avg Job Value", format="$%.2f"),
+                    "avg_completion_time": st.column_config.NumberColumn("Avg Days to Complete", format="%.1f"),
+                    "last_login_formatted": "Last Login"
+                },
+                use_container_width=True
+            )
+            
+            # Top performers section
+            st.markdown("#### 🏆 Top Performing Technicians")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**Most Jobs Completed**")
+                top_jobs = technician_data.nlargest(3, 'completed_jobs')
+                for i, (_, tech) in enumerate(top_jobs.iterrows()):
+                    medal = ["🥇", "🥈", "🥉"][i]
+                    st.write(f"{medal} {tech['technician_name']} - {tech['completed_jobs']} jobs")
+            
+            with col2:
+                st.markdown("**Highest Revenue**")
+                top_revenue = technician_data.nlargest(3, 'total_revenue')
+                for i, (_, tech) in enumerate(top_revenue.iterrows()):
+                    medal = ["🥇", "🥈", "🥉"][i]
+                    st.write(f"{medal} {tech['technician_name']} - ${tech['total_revenue']:.2f}")
+            
+            with col3:
+                st.markdown("**Best Success Rate**")
+                tech_with_jobs = technician_data[technician_data['total_jobs'] >= 5]  # Only consider techs with at least 5 jobs
+                if not tech_with_jobs.empty:
+                    tech_with_jobs['success_rate'] = (tech_with_jobs['completed_jobs'] / tech_with_jobs['total_jobs'] * 100)
+                    top_success = tech_with_jobs.nlargest(3, 'success_rate')
+                    for i, (_, tech) in enumerate(top_success.iterrows()):
+                        medal = ["🥇", "🥈", "🥉"][i]
+                        st.write(f"{medal} {tech['technician_name']} - {tech['success_rate']:.1f}%")
+                else:
+                    st.write("Not enough data")
+            
+            # Workload distribution
+            st.markdown("#### 📊 Current Workload Distribution")
+            
+            current_workload = pd.read_sql("""
+                SELECT u.full_name as technician_name,
+                       s.name as store_name,
+                       COUNT(CASE WHEN j.status = 'In Progress' THEN 1 END) as active_jobs,
+                       COUNT(CASE WHEN j.status = 'New' THEN 1 END) as pending_jobs,
+                       COUNT(CASE WHEN j.status IN ('In Progress', 'New') THEN 1 END) as total_workload
+                FROM users u
+                LEFT JOIN stores s ON u.store_id = s.id
+                LEFT JOIN jobs j ON u.id = j.assigned_by
+                WHERE u.role IN ('staff', 'technician')
+                GROUP BY u.id, u.full_name, s.name
+                ORDER BY total_workload DESC
+            """, conn)
+            
+            if not current_workload.empty:
+                fig = px.bar(current_workload, 
+                           x='technician_name', 
+                           y=['active_jobs', 'pending_jobs'],
+                           title="Current Workload by Technician",
+                           labels={'value': 'Number of Jobs', 'variable': 'Job Status'},
+                           color_discrete_map={'active_jobs': 'orange', 'pending_jobs': 'lightblue'})
+                fig.update_xaxes(tickangle=45)
+                st.plotly_chart(fig, use_container_width=True)
+            
+        else:
+            st.info("No technician data available for the selected criteria")
+    
+    with tab7:
+        st.markdown("### 📅 Daily Analysis")
+        
+        # Date selector for daily analysis
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            analysis_date = st.date_input(
+                "Select Date for Analysis",
+                value=datetime.now().date(),
+                max_value=datetime.now().date(),
+                key="daily_analysis_date"
+            )
+        
+        with col2:
+            # Store filter for daily analysis
+            daily_store_options = ["All Stores"] + all_stores_tech['name'].tolist()
+            selected_daily_store = st.selectbox("Select Store", daily_store_options, key="daily_store_filter")
+        
+        # Build query for daily analysis
+        daily_base_query = f"""
+            SELECT s.name as store_name,
+                   COUNT(DISTINCT j.id) as total_jobs_created,
+                   COUNT(DISTINCT CASE WHEN j.status = 'Completed' AND DATE(j.completed_at) = '{analysis_date}' THEN j.id END) as jobs_completed_today,
+                   COUNT(DISTINCT CASE WHEN j.status = 'New' THEN j.id END) as new_jobs,
+                   COUNT(DISTINCT CASE WHEN j.status = 'In Progress' THEN j.id END) as in_progress_jobs,
+                   COALESCE(SUM(CASE WHEN j.status = 'Completed' AND DATE(j.completed_at) = '{analysis_date}' THEN j.actual_cost ELSE 0 END), 0) as daily_revenue,
+                   COUNT(DISTINCT c.id) as customers_served
+            FROM stores s
+            LEFT JOIN jobs j ON s.id = j.store_id AND DATE(j.created_at) = '{analysis_date}'
+            LEFT JOIN customers c ON s.id = c.store_id AND DATE(c.created_at) = '{analysis_date}'
+        """
+        
+        if selected_daily_store != "All Stores":
+            store_id_daily = all_stores_tech[all_stores_tech['name'] == selected_daily_store]['id'].iloc[0]
+            daily_base_query += f" WHERE s.id = {store_id_daily}"
+        
+        daily_base_query += " GROUP BY s.id, s.name ORDER BY daily_revenue DESC"
+        
+        daily_data = pd.read_sql(daily_base_query, conn)
+        
+        if not daily_data.empty:
+            # Daily summary metrics
+            st.markdown(f"#### 📊 Daily Summary for {analysis_date}")
+            
+            total_jobs_created = daily_data['total_jobs_created'].sum()
+            total_jobs_completed = daily_data['jobs_completed_today'].sum()
+            total_daily_revenue = daily_data['daily_revenue'].sum()
+            total_customers = daily_data['customers_served'].sum()
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("📋 Jobs Created", total_jobs_created)
+            
+            with col2:
+                st.metric("✅ Jobs Completed", total_jobs_completed)
+            
+            with col3:
+                st.metric("💰 Daily Revenue", f"${total_daily_revenue:.2f}")
+            
+            with col4:
+                st.metric("👥 New Customers", total_customers)
+            
+            # Daily performance by store
+            if selected_daily_store == "All Stores":
+                st.markdown("#### 🏪 Store Performance Today")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.bar(daily_data, x='store_name', y='total_jobs_created',
+                               title="Jobs Created Today by Store",
+                               color='store_name')
+                    fig.update_layout(showlegend=False)
+                    fig.update_xaxes(tickangle=45)
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    fig = px.bar(daily_data, x='store_name', y='daily_revenue',
+                               title="Revenue Generated Today by Store",
+                               color='store_name')
+                    fig.update_layout(showlegend=False)
+                    fig.update_xaxes(tickangle=45)
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            # Hourly analysis for the selected date
+            st.markdown("#### ⏰ Hourly Job Creation Pattern")
+            
+            hourly_query = f"""
+                SELECT strftime('%H', j.created_at) as hour,
+                       COUNT(*) as jobs_count,
+                       SUM(j.actual_cost) as hourly_revenue
+                FROM jobs j
+                JOIN stores s ON j.store_id = s.id
+                WHERE DATE(j.created_at) = '{analysis_date}'
+            """
+            
+            if selected_daily_store != "All Stores":
+                hourly_query += f" AND s.name = '{selected_daily_store}'"
+            
+            hourly_query += """
+                GROUP BY strftime('%H', j.created_at)
+                ORDER BY hour
+            """
+            
+            hourly_data = pd.read_sql(hourly_query, conn)
+            
+            if not hourly_data.empty:
+                # Convert hour to more readable format
+                hourly_data['hour_formatted'] = hourly_data['hour'].apply(lambda x: f"{x}:00")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.line(hourly_data, x='hour_formatted', y='jobs_count',
+                                title="Jobs Created by Hour",
+                                markers=True)
+                    fig.update_xaxes(title="Hour of Day")
+                    fig.update_yaxes(title="Number of Jobs")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    fig = px.bar(hourly_data, x='hour_formatted', y='hourly_revenue',
+                               title="Revenue by Hour",
+                               color='hourly_revenue')
+                    fig.update_xaxes(title="Hour of Day")
+                    fig.update_yaxes(title="Revenue ($)")
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"No hourly data available for {analysis_date}")
+            
+            # Daily technician activity
+            st.markdown("#### 👨‍🔧 Technician Activity Today")
+            
+            daily_tech_query = f"""
+                SELECT u.full_name as technician_name,
+                       s.name as store_name,
+                       COUNT(CASE WHEN DATE(j.created_at) = '{analysis_date}' THEN 1 END) as jobs_assigned_today,
+                       COUNT(CASE WHEN DATE(j.completed_at) = '{analysis_date}' THEN 1 END) as jobs_completed_today,
+                       SUM(CASE WHEN DATE(j.completed_at) = '{analysis_date}' THEN j.actual_cost ELSE 0 END) as revenue_today
+                FROM users u
+                LEFT JOIN stores s ON u.store_id = s.id
+                LEFT JOIN jobs j ON u.id = j.assigned_by
+                WHERE u.role IN ('staff', 'technician')
+            """
+            
+            if selected_daily_store != "All Stores":
+                daily_tech_query += f" AND s.name = '{selected_daily_store}'"
+            
+            daily_tech_query += """
+                GROUP BY u.id, u.full_name, s.name
+                HAVING jobs_assigned_today > 0 OR jobs_completed_today > 0
+                ORDER BY jobs_completed_today DESC, jobs_assigned_today DESC
+            """
+            
+            daily_tech_data = pd.read_sql(daily_tech_query, conn)
+            
+            if not daily_tech_data.empty:
+                st.dataframe(
+                    daily_tech_data,
+                    column_config={
+                        "technician_name": "Technician",
+                        "store_name": "Store",
+                        "jobs_assigned_today": "Jobs Assigned Today",
+                        "jobs_completed_today": "Jobs Completed Today",
+                        "revenue_today": st.column_config.NumberColumn("Revenue Today", format="$%.2f")
+                    },
+                    use_container_width=True
+                )
+            else:
+                st.info(f"No technician activity data for {analysis_date}")
+            
+            # Device types worked on today
+            st.markdown("#### 📱 Device Types Serviced Today")
+            
+            device_daily_query = f"""
+                SELECT j.device_type,
+                       COUNT(*) as count,
+                       AVG(j.actual_cost) as avg_cost
+                FROM jobs j
+                JOIN stores s ON j.store_id = s.id
+                WHERE DATE(j.created_at) = '{analysis_date}'
+                  AND j.device_type IS NOT NULL 
+                  AND j.device_type != ''
+            """
+            
+            if selected_daily_store != "All Stores":
+                device_daily_query += f" AND s.name = '{selected_daily_store}'"
+            
+            device_daily_query += """
+                GROUP BY j.device_type
+                ORDER BY count DESC
+            """
+            
+            device_daily_data = pd.read_sql(device_daily_query, conn)
+            
+            if not device_daily_data.empty:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = px.pie(device_daily_data, values='count', names='device_type',
+                               title="Device Types Serviced Today")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    fig = px.bar(device_daily_data, x='device_type', y='avg_cost',
+                               title="Average Repair Cost by Device Type",
+                               color='device_type')
+                    fig.update_layout(showlegend=False)
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"No device service data for {analysis_date}")
+            
+            # Weekly comparison
+            st.markdown("#### 📈 Weekly Trend Comparison")
+            
+            # Get data for the past 7 days including selected date
+            week_start = analysis_date - timedelta(days=6)
+            week_end = analysis_date
+            
+            weekly_query = f"""
+                SELECT DATE(j.created_at) as date,
+                       COUNT(*) as jobs_created,
+                       COUNT(CASE WHEN j.status = 'Completed' THEN 1 END) as jobs_completed,
+                       SUM(CASE WHEN j.status = 'Completed' THEN j.actual_cost ELSE 0 END) as daily_revenue
+                FROM jobs j
+                JOIN stores s ON j.store_id = s.id
+                WHERE DATE(j.created_at) BETWEEN '{week_start}' AND '{week_end}'
+            """
+            
+            if selected_daily_store != "All Stores":
+                weekly_query += f" AND s.name = '{selected_daily_store}'"
+            
+            weekly_query += """
+                GROUP BY DATE(j.created_at)
+                ORDER BY date
+            """
+            
+            weekly_data = pd.read_sql(weekly_query, conn)
+            
+            if not weekly_data.empty:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    fig = make_subplots(specs=[[{"secondary_y": True}]])
+                    
+                    fig.add_trace(
+                        go.Scatter(x=weekly_data['date'], y=weekly_data['jobs_created'],
+                                 mode='lines+markers', name='Jobs Created', line=dict(color='blue')),
+                        secondary_y=False
+                    )
+                    
+                    fig.add_trace(
+                        go.Scatter(x=weekly_data['date'], y=weekly_data['jobs_completed'],
+                                 mode='lines+markers', name='Jobs Completed', line=dict(color='green')),
+                        secondary_y=False
+                    )
+                    
+                    fig.update_xaxes(title_text="Date")
+                    fig.update_yaxes(title_text="Number of Jobs", secondary_y=False)
+                    fig.update_layout(title_text="7-Day Job Activity Trend")
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    fig = px.line(weekly_data, x='date', y='daily_revenue',
+                                title="7-Day Revenue Trend",
+                                markers=True)
+                    fig.update_yaxes(title="Revenue ($)")
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No weekly trend data available")
+                
+        else:
+            st.info(f"No data available for {analysis_date}")
     
     conn.close()
+    

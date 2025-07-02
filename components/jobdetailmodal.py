@@ -127,24 +127,24 @@ def show_job_details_modal(conn, job_id ,editable=True):
             st.divider()
 
             # Financials
-            if editable :
-                st.markdown("### 💰 Financial Details")
-                estimated = job_details[11] or 0
-                raw = job_details[12] or 0  
-                actual = job_details[13] or 0
-                profit = actual - raw
-                col = st.columns(1)[0]
-                with col:
-                    st.metric("Deposit Amount", f"${estimated:.2f}")
-                    st.metric("Raw Cost", f"${raw:.2f}")
-                    st.metric("Final Amount", f"${actual:.2f}")
-                    profit_color = "normal" if profit >= 0 else "inverse"
-                    st.metric("Profit", f"${profit:.2f}", delta=f"${profit:.2f}", delta_color=profit_color)
+            # if editable :
+            #     st.markdown("### 💰 Financial Details")
+            #     estimated = job_details[11] or 0
+            #     raw = job_details[12] or 0  
+            #     actual = job_details[13] or 0
+            #     profit = actual - raw
+            #     col = st.columns(1)[0]
+            #     with col:
+            #         st.metric("Deposit Amount", f"${estimated:.2f}")
+            #         st.metric("Raw Cost", f"${raw:.2f}")
+            #         st.metric("Final Amount", f"${actual:.2f}")
+            #         profit_color = "normal" if profit >= 0 else "inverse"
+            #         st.metric("Profit", f"${profit:.2f}", delta=f"${profit:.2f}", delta_color=profit_color)
 
-                    if actual > 0:
-                        margin = (profit / actual) * 100
-                        margin_color = "🟢" if margin > 30 else "🟡" if margin > 10 else "🔴"
-                        st.markdown(f"**Profit Margin:** {margin_color} {margin:.1f}%")
+            #         if actual > 0:
+            #             margin = (profit / actual) * 100
+            #             margin_color = "🟢" if margin > 30 else "🟡" if margin > 10 else "🔴"
+            #             st.markdown(f"**Profit Margin:** {margin_color} {margin:.1f}%")
 
             # Timeline
             if job_details[2] or job_details[3]:

@@ -24,7 +24,7 @@ def display_bill_preview(conn, job_id, customer_name, customer_phone, device_typ
         border: 1px solid #e0e0e0;
         border-radius: 10px;
         padding: 20px;
-        background-color: #ffffff;
+        background-color: black;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     ">
     <h2 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px;">
@@ -35,6 +35,27 @@ def display_bill_preview(conn, job_id, customer_name, customer_phone, device_typ
     # Customer Information Section
     st.markdown("## Customer Information")
     col1, col2 = st.columns(2)
+    st.markdown("#### Status QR Code")
+    try:
+        qr_url = f"https://jayanth119-refactored-jobsheet-main-vtllnj.streamlit.app//repair_status?job_id={job_id}"
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+        
+        st.image(img_bytes, width=150)
+        st.caption("Scan to track repair status")
+    except Exception as e:
+        st.error(f"Failed to generate QR code: {str(e)}")
     with col1:
         st.markdown(f"**Name:** {customer_name}")
         st.markdown(f"**Phone:** {customer_phone}")
@@ -98,38 +119,20 @@ def display_bill_preview(conn, job_id, customer_name, customer_phone, device_typ
             pass  # Already in preview mode
     
     with col2:
-        if status == "New":
-            if st.button("▶️ Start", key=f"start_{job_id}"):
-                st.session_state[f"show_update_{job_id}"] = "In Progress"
-                st.rerun()
+        pass 
+        # if status == "New":
+        #     if st.button("▶️ Start", key=f"start_{job_id}"):
+        #         st.session_state[f"show_update_{job_id}"] = "In Progress"
+        #         st.rerun()
     
     with col3:
-        if st.button("👁️ View", key=f"view_{job_id}"):
-            st.session_state[f"show_details_{job_id}"] = True
-            st.rerun()
+        pass 
+        # if st.button("👁️ View", key=f"view_{job_id}"):
+        #     st.session_state[f"show_details_{job_id}"] = True
+        #     st.rerun()
     
     st.markdown("</div>", unsafe_allow_html=True)
     
     # Generate QR code for status tracking
     st.markdown("---")
-    st.markdown("#### Status QR Code")
-    try:
-        qr_url = f"https://jayanth119-refactored-jobsheet-main-vtllnj.streamlit.app//repair_status?job_id={job_id}"
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_L,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_url)
-        qr.make(fit=True)
-        
-        img = qr.make_image(fill_color="black", back_color="white")
-        img_bytes = io.BytesIO()
-        img.save(img_bytes, format="PNG")
-        img_bytes.seek(0)
-        
-        st.image(img_bytes, width=150)
-        st.caption("Scan to track repair status")
-    except Exception as e:
-        st.error(f"Failed to generate QR code: {str(e)}")
+

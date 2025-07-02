@@ -1,10 +1,13 @@
 import streamlit as st 
 import hashlib 
+
 def create_job_in_database(conn, db, user, job_data, uploaded_photos):
     """Create job in database using only schema-compatible fields with proper photo handling"""
     try:
         cursor = conn.cursor()
-        store_id = user.get('store_id')
+        
+        # Use selected store instead of user's store
+        store_id = job_data.get('selected_store_id') or user.get('store_id')
         
         # Check if customers table has address column
         cursor.execute("PRAGMA table_info(customers)")
@@ -37,7 +40,7 @@ def create_job_in_database(conn, db, user, job_data, uploaded_photos):
                     customer_id
                 ))
         else:
-            # Create new customer
+            # Create new customer with selected store
             if has_customer_address:
                 cursor.execute('''
                     INSERT INTO customers (name, phone, email, address, store_id, created_at)
@@ -61,38 +64,51 @@ def create_job_in_database(conn, db, user, job_data, uploaded_photos):
                 ))
             customer_id = cursor.lastrowid
         
-        # Create job using only schema-compatible fields
+        # Create job using selected store_id
         cursor.execute('''
             INSERT INTO jobs (
                 customer_id, store_id, device_type, device_model,
                 device_password_type, device_password,
-                problem_description, deposit_cost, actual_cost,
-                notification_methods, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                problem_description, deposit_cost, estimate_cost,
+                notification_methods, assigned_by, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ''', (
             customer_id, store_id, job_data['device_type'], job_data['device_model'],
             job_data['device_password_type'], job_data['device_password'],
             job_data['problem_description'], job_data['deposit_cost'], 
-            job_data['actual_cost'], ','.join(job_data['notification_methods'])
+            job_data['estimate_cost'], ','.join(job_data['notification_methods']),
+            job_data['assigned_by']
         ))
         
         job_id = cursor.lastrowid
         
-        # Assign technician if selected
-        if job_data['technician_id']:
-            cursor.execute('''
-                INSERT INTO technician_assignments 
-                (technician_id, assigned_by, status, notes, assigned_at)
-                VALUES (?, ?, 'active', 'Initial assignment', CURRENT_TIMESTAMP)
-            ''', (job_data['technician_id'], user['id']))
-            assignment_id = cursor.lastrowid
-            
-            cursor.execute('''
-                INSERT INTO assignment_jobs (assignment_id, job_id)
-                VALUES (?, ?)
-            ''', (assignment_id, job_id))
+        # FIXED: Assign technician if selected (check for None explicitly)
+        if job_data.get('technician_id') is not None:
+            try:
+                # Create technician assignment
+                cursor.execute('''
+                    INSERT INTO technician_assignments 
+                    (technician_id, assigned_by, status, notes, assigned_at)
+                    VALUES (?, ?, 'active', 'Initial assignment', CURRENT_TIMESTAMP)
+                ''', (job_data['technician_id'], user['id']))
+                assignment_id = cursor.lastrowid
+                
+                # Link assignment to job
+                cursor.execute('''
+                    INSERT INTO assignment_jobs (assignment_id, job_id)
+                    VALUES (?, ?)
+                ''', (assignment_id, job_id))
+                
+                st.success(f"✅ Technician assigned successfully (Assignment ID: {assignment_id})")
+                
+            except Exception as assign_error:
+                st.error(f"❌ Error assigning technician: {str(assign_error)}")
+                # Don't fail the entire job creation if technician assignment fails
+                pass
+        else:
+            st.info("ℹ️ Job created without technician assignment")
         
-        # Commit the main transaction first
+        # Commit all changes before handling photos
         conn.commit()
         
         # Handle photo uploads AFTER committing the job
